@@ -66,3 +66,28 @@ teardown() { rm -rf "$TMP"; }
   run "$ATELIER_CC_ROOT/scripts/attach-pipeline.sh" 2026-05-14-existing-b8d2
   [ "$status" -ne 0 ]
 }
+
+@test "attach-pipeline writes state into the supplied dir's workspace, not CWD's workspace" {
+  # Cross-workspace regression: dispatcher's CWD is workspace A, but the user
+  # references a pipeline dir in workspace B. ps_init must target B.
+  # Resolve via pwd -P because macOS mktemp returns /var/... which is a symlink
+  # to /private/var/... — the script normalizes paths the same way.
+  OTHER="$(cd "$(mktemp -d)" && pwd -P)"
+  mkdir -p "$OTHER/.atelier/pipelines/2026-05-14-cross-wsp-c0de"
+  printf 'remote plan\n' > "$OTHER/.atelier/pipelines/2026-05-14-cross-wsp-c0de/plan.md"
+  pid="$("$ATELIER_CC_ROOT/scripts/attach-pipeline.sh" "$OTHER/.atelier/pipelines/2026-05-14-cross-wsp-c0de" 'cross-wsp prompt')"
+  [ "$pid" = "2026-05-14-cross-wsp-c0de" ]
+  # State landed in OTHER, not in TMP (the CWD workspace).
+  [ -f "$OTHER/.atelier/pipelines/$pid/pipeline-state.json" ]
+  [ ! -f ".atelier/pipelines/$pid/pipeline-state.json" ]
+  [ "$(jq -r .workspacePath "$OTHER/.atelier/pipelines/$pid/pipeline-state.json")" = "$OTHER" ]
+  rm -rf "$OTHER"
+}
+
+@test "attach-pipeline picks up CLAUDE_CODE_SESSION_ID when CLAUDE_SESSION_ID is unset" {
+  # Claude Code's env var was renamed; common.sh normalizes the legacy name.
+  unset CLAUDE_SESSION_ID
+  export CLAUDE_CODE_SESSION_ID="sess-renamed"
+  pid="$("$ATELIER_CC_ROOT/scripts/attach-pipeline.sh" 2026-05-14-existing-b8d2 'x')"
+  [ "$(jq -r .sourceSessionId ".atelier/pipelines/$pid/pipeline-state.json")" = "sess-renamed" ]
+}

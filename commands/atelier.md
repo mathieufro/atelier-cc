@@ -65,8 +65,14 @@ Creates a pipeline whose first dispatched stage is the one the user named — us
 2. Infer a candidate stage from the user's wording: e.g. "planning" / "write plan" → `write_plan`, "e2e" / "end-to-end tests" → `write_e2e_plan` (or `e2e` if the plan exists), "implement" → `implement`, "review" → the appropriate `review_*` stage, "spec" / "brainstorm" → `brainstorm`. If you cannot infer, leave the candidate empty.
 3. **Detect existing-pipeline reference.** Scan $ARGUMENTS for a path containing `.atelier/pipelines/<dir-name>` (either a directory, or a file like `plan.md` / `spec.md` inside one). If found, that's the **adopt target** — the new pipeline should LIVE in that dir so its state lands next to the existing artifacts. Otherwise the new pipeline gets a fresh dir.
    - If an adopt target is found AND the dir lacks `pipeline-state.json`, run `Bash`: `bash ${CLAUDE_PLUGIN_ROOT}/scripts/attach-pipeline.sh "<dir-path>" "<task description>"` — capture the pipeline id.
-   - If an adopt target is found AND the dir already has `pipeline-state.json`, this is a managed pipeline — route to **resume** or **restart-from** instead of start-at-stage. AskUserQuestion to confirm: options `Resume`, `Restart from <stage>`, `New sibling pipeline`.
+   - If an adopt target is found AND the dir already has `pipeline-state.json`, this is a managed pipeline. AskUserQuestion to choose:
+     - option 1, label `Restart from <inferred-stage>` (Recommended) — the user already named the stage in $ARGUMENTS; on selection, run `Bash`: `bash ${CLAUDE_PLUGIN_ROOT}/scripts/restart-stage.sh <pipeline-id> <inferred-stage>` and end your turn (do NOT signal — restart-stage.sh writes state directly and the Stop hook routes from there).
+     - option 2, label `Resume current stage` — on selection, run `Bash`: `bash ${CLAUDE_PLUGIN_ROOT}/scripts/resume.sh <pipeline-id>` and end your turn.
+     - option 3, label `New sibling pipeline` — fall through to the no-adopt-target branch (start-pipeline.sh).
+     If you have NO confidently inferred stage, drop option 1 and present only Resume / New sibling.
    - Otherwise (no adopt target), run `Bash`: `bash ${CLAUDE_PLUGIN_ROOT}/scripts/start-pipeline.sh "<task description>"` — capture the pipeline id.
+
+   **Stop here** if you took the Restart-from or Resume sub-branches above — those scripts mutate state directly and the Stop hook will dispatch the chosen stage. Continue to step 4 only for the attach-pipeline.sh and start-pipeline.sh paths (which leave the pipeline at the classify gate, awaiting topology + worktree + currentStage via signal).
 4. Run `Bash`: `bash ${CLAUDE_PLUGIN_ROOT}/scripts/list-topologies.sh` — parse one `name<TAB>description` per line.
 5. AskUserQuestion #1 — header `Pipeline`, question "Which pipeline type fits this task?", options dynamically built from topologies (`label = description`, value = name). Pick a sensible default ordering based on the inferred stage (e.g. if stage involves "e2e" prefer `feature`/`epic`; if "plan" prefer `feature`/`plan`).
 6. Run `Bash`: `bash ${CLAUDE_PLUGIN_ROOT}/scripts/list-stages.sh <chosen-topology>` — parse one `name<TAB>skill<TAB>mode` per line.
