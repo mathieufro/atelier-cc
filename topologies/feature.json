@@ -1,0 +1,22 @@
+{
+  "name": "feature",
+  "description": "Full feature pipeline — spec → plan → implement → review → simplify → e2e → validate",
+  "stages": [
+    { "name": "compile_brainstorm", "mode": "autonomous", "skill": "compiling-brainstorm", "artifactType": "compiled-brainstorm" },
+    { "name": "brainstorm", "mode": "interactive", "skill": "brainstorming-feature", "artifactType": "spec", "requiresArtifact": true },
+    { "name": "review_spec", "mode": "autonomous", "skill": "reviewing-specs", "reviewBehavior": "fixing-specs", "artifactType": "spec-review", "requiresArtifact": true },
+    { "name": "establish_conventions", "mode": "autonomous", "skill": "establishing-conventions", "artifactType": "conventions", "requiresArtifact": true },
+    { "name": "compile_plan", "mode": "autonomous", "skill": "compiling-plan", "artifactType": "compiled-plan" },
+    { "name": "write_plan", "mode": "autonomous", "skill": "writing-plans", "artifactType": "plan", "requiresArtifact": true },
+    { "name": "review_plan", "mode": "autonomous", "skill": "reviewing-plans", "reviewBehavior": "fixing", "artifactType": "plan-review", "requiresArtifact": true },
+    { "name": "implement", "mode": "autonomous", "skill": "implementing-plans", "supportsPartial": true },
+    { "name": "review_code", "mode": "autonomous", "skill": "reviewing-implementation", "reviewBehavior": "fixing", "artifactType": "code-review", "requiresArtifact": true },
+    { "name": "simplify", "mode": "autonomous", "skill": "simplifying-implementation", "artifactType": "simplify", "requiresArtifact": true },
+    { "name": "e2e_gate", "mode": "autonomous", "skill": "e2e-gating", "gateBehavior": "skip-to-validate", "artifactType": "e2e-gate", "requiresArtifact": true },
+    { "name": "compile_e2e_plan", "mode": "autonomous", "skill": "compiling-plan", "artifactType": "compiled-e2e-plan" },
+    { "name": "write_e2e_plan", "mode": "autonomous", "skill": "writing-e2e-plans", "artifactType": "e2e-plan", "requiresArtifact": true },
+    { "name": "review_e2e_plan", "mode": "autonomous", "skill": "reviewing-e2e-plans", "reviewBehavior": "fixing", "artifactType": "e2e-plan-review", "requiresArtifact": true },
+    { "name": "e2e", "mode": "autonomous", "skill": "e2e-validation", "supportsPartial": true },
+    { "name": "validate", "mode": "autonomous", "skill": "validating", "artifactType": "validation", "requiresArtifact": true }
+  ]
+}

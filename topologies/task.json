@@ -1,0 +1,14 @@
+{
+  "name": "task",
+  "description": "Task pipeline — brainstorm + plan in one hybrid, then implement",
+  "stages": [
+    { "name": "compile_task_brainstorm", "mode": "autonomous", "skill": "compiling-brainstorm", "artifactType": "compiled-task-brainstorm" },
+    { "name": "task_brainstorm", "mode": "interactive", "skill": "task-brainstorming", "artifactType": "task-spec", "requiresArtifact": true },
+    { "name": "review_task", "mode": "autonomous", "skill": "reviewing-task-plans", "reviewBehavior": "fixing", "artifactType": "task-review", "requiresArtifact": true },
+    { "name": "establish_conventions", "mode": "autonomous", "skill": "establishing-conventions", "artifactType": "conventions", "requiresArtifact": true },
+    { "name": "implement", "mode": "autonomous", "skill": "implementing-plans", "supportsPartial": true },
+    { "name": "review_code", "mode": "autonomous", "skill": "reviewing-implementation", "reviewBehavior": "fixing", "artifactType": "code-review", "requiresArtifact": true },
+    { "name": "simplify", "mode": "autonomous", "skill": "simplifying-implementation", "artifactType": "simplify", "requiresArtifact": true },
+    { "name": "validate", "mode": "autonomous", "skill": "validating", "artifactType": "validation", "requiresArtifact": true }
+  ]
+}

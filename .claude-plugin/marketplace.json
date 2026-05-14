@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "atelier",
+  "version": "0.1.0",
+  "description": "Local install marketplace for the atelier-cc plugin.",
+  "owner": { "name": "Atelier" },
+  "plugins": [
+    {
+      "name": "atelier",
+      "description": "Atelier — 15-stage autonomous pipeline for software development.",
+      "source": "./",
+      "category": "development"
+    }
+  ]
+}

@@ -1,0 +1,153 @@
+#!/usr/bin/env bash
+# Stop-hook routing decision tree. Pure function: (state, topology) -> decision JSON.
+# No side effects. The Stop hook applies the returned decision via ps_update.
+
+readonly ROUTING_FIX_ATTEMPT_CAP=5
+readonly ROUTING_PARTIAL_CAP=5
+
+routing_decide() {
+  local state="$1" topo="$2"
+
+  local current verdict
+  current="$(printf '%s' "$state" | jq -r '.currentStage')"
+  verdict="$(printf '%s' "$state" | jq -r '.lastVerdict')"
+
+  if [ "$current" = "null" ] || [ -z "$current" ]; then
+    local first; first="$(topology_first_stage "$topo")"
+    _routing_emit dispatch "$first" "" "" "running" ""
+    return
+  fi
+
+  local cur_is_fix parent_review_id most_recent_id
+  cur_is_fix="$(printf '%s' "$state" | jq -r --arg c "$current" '
+    ((.stages // []) | map(select(.stage == $c)) | last // {}).dynamicallyInserted // false')"
+  parent_review_id="$(printf '%s' "$state" | jq -r --arg c "$current" '
+    ((.stages // []) | map(select(.stage == $c)) | last // {}).parentReviewStageId // empty')"
+  most_recent_id="$(printf '%s' "$state" | jq -r --arg c "$current" '
+    ((.stages // []) | map(select(.stage == $c)) | last // {}).id // empty')"
+
+  local stage; stage="$(topology_stage "$topo" "$current" 2>/dev/null || true)"
+  # Dynamically inserted fix stages don't appear in topology; missing $stage is
+  # only an error for non-fix stages.
+  if [ -z "$stage" ] && [ "$cur_is_fix" != "true" ]; then
+    _routing_emit pause "null" "" "" "stuck" "current stage not in topology: $current"
+    return
+  fi
+
+  local review_behavior gate_behavior supports_partial
+  if [ -n "$stage" ]; then
+    review_behavior="$(printf '%s' "$stage" | jq -r '.reviewBehavior // empty')"
+    gate_behavior="$(printf '%s' "$stage" | jq -r '.gateBehavior // empty')"
+    supports_partial="$(printf '%s' "$stage" | jq -r '.supportsPartial // false')"
+  else
+    # Dynamically inserted fix stages: synthesized as autonomous + supportsPartial.
+    review_behavior=""
+    gate_behavior=""
+    supports_partial="true"
+  fi
+
+  case "$verdict" in
+    null|"")
+      local last_status; last_status="$(printf '%s' "$state" | jq -r --arg c "$current" '
+        ((.stages // []) | map(select(.stage == $c)) | last // {}).status // empty')"
+      if [ -z "$last_status" ] || [ "$last_status" = "idle" ]; then
+        _routing_emit dispatch "$stage" "" "" "running" ""
+      else
+        _routing_emit pause "null" "" "" "stuck" "subagent terminated without signaling at $current (last stage status: $last_status)"
+      fi
+      ;;
+    partial)
+      if [ "$supports_partial" = "true" ]; then
+        local attempts; attempts="$(printf '%s' "$state" | jq -r --arg s "$current" '(.fixAttempts[$s] // 0) | tostring')"
+        if [ "${attempts:-0}" -ge "$ROUTING_PARTIAL_CAP" ]; then
+          _routing_emit pause "null" "" "" "idle" "partial retry cap exceeded"
+        else
+          _routing_emit dispatch "$stage" "" "$current" "running" ""
+        fi
+      else
+        _routing_emit pause "null" "" "" "stuck" "partial verdict on non-partial stage: $current"
+      fi
+      ;;
+    done|proceed)
+      # After a fix stage, advance past the parent review to the next topology stage.
+      # The fix agent's verdict supersedes re-review — looping back would just re-run
+      # the same review that just triggered the fix.
+      local pivot="$current"
+      if [ "$cur_is_fix" = "true" ] && [ -n "$parent_review_id" ]; then
+        pivot="$(printf '%s' "$state" | jq -r --arg id "$parent_review_id" '
+          (.stages // []) | map(select(.id == $id)) | first | .stage')"
+      fi
+      local next; next="$(topology_next_after "$topo" "$pivot")"
+      if [ -z "$next" ]; then
+        _routing_emit terminate "null" "" "" "completed" ""
+      else
+        _routing_emit dispatch "$next" "" "" "running" ""
+      fi
+      ;;
+    has_issues)
+      if [ -n "$review_behavior" ]; then
+        local attempts; attempts="$(printf '%s' "$state" | jq -r --arg s "$current" '(.fixAttempts[$s] // 0) | tostring')"
+        if [ "${attempts:-0}" -ge "$ROUTING_FIX_ATTEMPT_CAP" ]; then
+          _routing_emit pause "null" "" "" "idle" "fix attempt cap exceeded for $current"
+        else
+          local fix_skill="$review_behavior"
+          local fix_stage_name="${current/review_/fix_}"
+          local fix_stage
+          fix_stage="$(jq -n \
+            --arg n "$fix_stage_name" \
+            --arg s "$fix_skill" \
+            '{name:$n, mode:"autonomous", skill:$s, supportsPartial:true, dynamicallyInserted:true}')"
+          _routing_emit dispatch "$fix_stage" "true" "$most_recent_id" "running" "" "$current"
+        fi
+      else
+        local next; next="$(topology_next_after "$topo" "$current")"
+        if [ -z "$next" ]; then
+          _routing_emit terminate "null" "" "" "completed" ""
+        else
+          _routing_emit dispatch "$next" "" "" "running" ""
+        fi
+      fi
+      ;;
+    skip)
+      if [ "$gate_behavior" = "skip-to-validate" ]; then
+        local validate_stage; validate_stage="$(topology_stage "$topo" "validate" 2>/dev/null || true)"
+        if [ -z "$validate_stage" ]; then
+          _routing_emit terminate "null" "" "" "completed" ""
+        else
+          _routing_emit dispatch "$validate_stage" "" "" "running" ""
+        fi
+      else
+        local next; next="$(topology_next_after "$topo" "$current")"
+        if [ -z "$next" ]; then _routing_emit terminate "null" "" "" "completed" ""
+        else _routing_emit dispatch "$next" "" "" "running" ""; fi
+      fi
+      ;;
+    stuck)
+      _routing_emit pause "null" "" "" "idle" "subagent signaled stuck at $current"
+      ;;
+    *)
+      _routing_emit pause "null" "" "" "stuck" "unknown verdict: $verdict"
+      ;;
+  esac
+}
+
+_routing_emit() {
+  local kind="$1" stage_json="$2" is_fix="${3:-}" parent_id="${4:-}" new_status="${5:-running}" err="${6:-}" inc_attempts="${7:-}"
+  jq -n \
+    --arg kind "$kind" \
+    --argjson stage "${stage_json:-null}" \
+    --arg isFix "${is_fix:-false}" \
+    --arg parent "${parent_id:-}" \
+    --arg status "$new_status" \
+    --arg err "$err" \
+    --arg inc "$inc_attempts" \
+    '{
+      kind: $kind,
+      stage: $stage,
+      isFixStage: ($isFix == "true"),
+      parentReviewStageId: (if $parent == "" then null else $parent end),
+      newStatus: $status,
+      error: (if $err == "" then null else $err end),
+      incrementFixAttempts: (if $inc == "" then null else $inc end)
+    }'
+}

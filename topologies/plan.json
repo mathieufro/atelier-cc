@@ -1,0 +1,9 @@
+{
+  "name": "plan",
+  "description": "Quick plan pipeline — fast brainstorm + plan in one shot, optional gate to implement",
+  "stages": [
+    { "name": "quick_plan", "mode": "interactive", "skill": "quick-planning", "artifactType": "plan", "requiresArtifact": true },
+    { "name": "review_quick_plan", "mode": "autonomous", "skill": "quick-plan-review", "reviewBehavior": "fixing", "artifactType": "plan-review", "requiresArtifact": true },
+    { "name": "plan_gate", "mode": "interactive", "skill": "plan-gate" }
+  ]
+}
