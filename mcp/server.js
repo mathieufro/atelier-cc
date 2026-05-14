@@ -18,6 +18,7 @@ const inputSchema = {
   outcome: z.enum(["fixed", "fixed_unverified", "inconclusive"]).optional(),
   pipelineType: z.string().optional(),
   worktreeChoice: z.enum(["in-tree", "worktree"]).optional(),
+  currentStage: z.string().optional(),
 }
 
 function workspaceRoot() {
@@ -116,10 +117,11 @@ server.registerTool(
       if (args.action !== undefined) state.lastAction = args.action
       if (args.outcome !== undefined) state.lastOutcome = args.outcome
 
-      if (args.pipelineType !== undefined || args.worktreeChoice !== undefined) {
+      if (args.pipelineType !== undefined || args.worktreeChoice !== undefined || args.currentStage !== undefined) {
         if (state.currentStage == null) {
           if (args.pipelineType !== undefined) state.type = args.pipelineType
           if (args.worktreeChoice !== undefined) state.worktreeChoice = args.worktreeChoice
+          if (args.currentStage !== undefined) state.currentStage = args.currentStage
           try {
             setupWorktreeIfNeeded(state, wsp, pid)
           } catch (e) {

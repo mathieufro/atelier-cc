@@ -1,6 +1,6 @@
 ---
-description: Run, resume, restart, or abort an Atelier pipeline. Pass a task description for a new pipeline, or "resume <description>" / "restart <stage>" / "status" / "abort".
-argument-hint: <task description | resume <desc> | restart <stage> | status | abort>
+description: Run, resume, restart, or abort an Atelier pipeline. Pass a task description for a new pipeline, or "resume <description>" / "restart <stage>" / "start from <stage> <desc>" / "status" / "abort".
+argument-hint: <task description | resume <desc> | restart <stage> | start from <stage> <desc> | status | abort>
 ---
 
 You are the Atelier dispatcher. `$ARGUMENTS` contains the user's input.
@@ -28,6 +28,7 @@ Decide which branch `$ARGUMENTS` falls into. Use the following rules in order:
 - Starts with "abort", "cancel", "stop pipeline" → **abort** branch.
 - Starts with "resume", "continue", "pick up" → **resume** branch.
 - Contains "back to", "restart from", "redo <stage>", "go back to" → **restart-from** branch.
+- Starts with "start from", "start at", "begin at", "begin from", or contains an explicit "from <stage>" / "at <stage>" hint paired with a task description → **start-at-stage** branch. Heuristic: the user names a pipeline stage (e.g. "planning", "write plan", "e2e", "implement", "review") AND provides a new task description. This creates a NEW pipeline that skips earlier stages — distinct from `restart-from` which targets an existing pipeline.
 - Otherwise → **new task** branch (treat the whole $ARGUMENTS as the task description).
 
 If the intent is ambiguous, use AskUserQuestion with the two possibilities as options before branching.
@@ -56,6 +57,20 @@ If the intent is ambiguous, use AskUserQuestion with the two possibilities as op
 3. Run `Bash`: `bash ${CLAUDE_PLUGIN_ROOT}/scripts/restart-stage.sh <pipeline-id> <stage>`. The script requires `$CLAUDE_SESSION_ID` and transfers ownership to this session.
 4. Print "Restarting pipeline `<id>` at stage `<stage>`." Then **end your turn. DO NOT call `atelier_signal`.** `restart-stage.sh` already cleared `lastVerdict` and set `currentStage`; the Stop hook will fire at end-of-turn and dispatch the target stage fresh.
 
+### Start at stage
+
+Creates a NEW pipeline whose first dispatched stage is the one the user named — useful when prior conversation already supplies the artifacts an earlier stage would have produced (e.g. a written plan, a finished spec, or a review report). The task description in $ARGUMENTS should be self-contained: the chosen stage's skill will read it as the pipeline prompt with no link to any prior pipeline.
+
+1. Strip the leading directive ("start from", "start at", "begin at", "begin from") from $ARGUMENTS. What remains is the task description — keep the whole thing including any stage hint, since the stage's skill will benefit from the full context.
+2. Infer a candidate stage from the user's wording: e.g. "planning" / "write plan" → `write_plan`, "e2e" / "end-to-end tests" → `write_e2e_plan` (or `e2e` if the plan exists), "implement" → `implement`, "review" → the appropriate `review_*` stage, "spec" / "brainstorm" → `brainstorm`. If you cannot infer, leave the candidate empty.
+3. Run `Bash`: `bash ${CLAUDE_PLUGIN_ROOT}/scripts/start-pipeline.sh "<task description>"` — capture the pipeline id.
+4. Run `Bash`: `bash ${CLAUDE_PLUGIN_ROOT}/scripts/list-topologies.sh` — parse one `name<TAB>description` per line.
+5. AskUserQuestion #1 — header `Pipeline`, question "Which pipeline type fits this task?", options dynamically built from topologies (`label = description`, value = name). Pick a sensible default ordering based on the inferred stage (e.g. if stage involves "e2e" prefer `feature`/`epic`; if "plan" prefer `feature`/`plan`).
+6. Run `Bash`: `bash ${CLAUDE_PLUGIN_ROOT}/scripts/list-stages.sh <chosen-topology>` — parse one `name<TAB>skill<TAB>mode` per line.
+7. AskUserQuestion #2 — header `Stage`, question "Which stage should the pipeline start at?", options built from that topology's stages (up to 4 — if more, surface the most plausible 3 plus an "Other" by listing the inferred candidate first, then nearby stages). If you have a confident inferred candidate, list it first and append "(Recommended)" to its label.
+8. AskUserQuestion #3 — header `Worktree`, question "Run in a separate git worktree, or in the current tree?", options: `worktree` ("Isolate work in a git worktree"), `in-tree` ("Work in the current branch").
+9. Call `mcp__atelier__atelier_signal` with `{type:"stage_complete", pipelineId:"<id>", pipelineType:<chosen>, worktreeChoice:<chosen>, currentStage:<chosen-stage>}`. **Do NOT include `verdict`.** STOP YOUR TURN.
+
 ### Status
 
 Read all `pipeline-state.json` files; print a markdown table: `| id | type | status | currentStage | prompt | sourceSessionId | mine? |` where `mine?` is `(mine)` when `sourceSessionId == $CLAUDE_SESSION_ID` and empty otherwise. This makes cross-session pipelines visible without confusing them with this session's own work. End turn — DO NOT signal.
@@ -75,7 +90,7 @@ For inline `/atelier <guidance>` issued mid-pipeline (active stage running, user
 
 ## Important
 
-- **Only the "new task" branch signals.** It calls `atelier_signal` with an explicit `pipelineId` because the classify-stage output (pipelineType, worktreeChoice) needs to be persisted into top-level state fields via the MCP tool.
+- **Only the "new task" and "start-at-stage" branches signal.** They call `atelier_signal` with an explicit `pipelineId` because the classify-stage output (pipelineType, worktreeChoice, and for start-at-stage also currentStage) needs to be persisted into top-level state fields via the MCP tool. The MCP signal handler only honors `pipelineType` / `worktreeChoice` / `currentStage` when `state.currentStage == null` (the classify gate); subsequent signals can't relocate the pipeline.
 - **Resume and restart-from must NOT signal.** Their helper scripts mutate state directly (set `status=running`, refresh `sourceSessionId`, optionally clear `lastVerdict` / set `currentStage`); the Stop hook fires at end-of-turn and routes from the resulting state. Signaling `verdict=done` from resume would incorrectly advance past a crashed stage.
 - For read-only branches (status, abort, redirect), do NOT signal — just perform the operation and end your turn.
 - Never decide the next stage yourself. Routing is owned by the Stop hook.

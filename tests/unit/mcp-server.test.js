@@ -134,6 +134,33 @@ describe("atelier_signal tool", () => {
     expect(state.worktreePath).toBeFalsy()
   })
 
+  it("stores currentStage on classify signal (start-at-stage branch)", async () => {
+    let state = JSON.parse(fs.readFileSync(statePath, "utf8"))
+    state.currentStage = null
+    fs.writeFileSync(statePath, JSON.stringify(state))
+    await client.callTool({
+      name: "atelier_signal",
+      arguments: { type: "stage_complete", pipelineId: pid, pipelineType: "feature", worktreeChoice: "in-tree", currentStage: "write_plan" },
+    })
+    state = JSON.parse(fs.readFileSync(statePath, "utf8"))
+    expect(state.type).toBe("feature")
+    expect(state.worktreeChoice).toBe("in-tree")
+    expect(state.currentStage).toBe("write_plan")
+    expect(state.lastVerdict).toBeFalsy()
+  })
+
+  it("ignores currentStage mid-pipeline (past classify gate)", async () => {
+    let state = JSON.parse(fs.readFileSync(statePath, "utf8"))
+    const originalStage = state.currentStage
+    const res = await client.callTool({
+      name: "atelier_signal",
+      arguments: { type: "stage_complete", pipelineId: pid, verdict: "done", currentStage: "brainstorm" },
+    })
+    state = JSON.parse(fs.readFileSync(statePath, "utf8"))
+    expect(state.currentStage).toBe(originalStage)
+    expect(res.content[0].text).toMatch(/ignored/)
+  })
+
   it("ignores pipelineType/worktreeChoice mid-pipeline (currentStage != null)", async () => {
     let state = JSON.parse(fs.readFileSync(statePath, "utf8"))
     const originalType = state.type
