@@ -4,7 +4,7 @@ load "${BATS_TEST_DIRNAME}/../fixtures/test-helpers.bash"
 setup() {
   TMP="$(mktemp -d)"; cd "$TMP"; mkdir .git
   export ATELIER_CC_ROOT="$BATS_TEST_DIRNAME/../.."
-  export CLAUDE_SESSION_ID="sess-t"
+  export CLAUDE_CODE_SESSION_ID="sess-t"
   export ATELIER_CC_WORKSPACE="$TMP"
   bash "$ATELIER_CC_ROOT/scripts/sync-skills.sh"
 }

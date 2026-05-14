@@ -8,20 +8,20 @@ setup() {
 }
 teardown() { rm -rf "$TMP"; }
 
-@test "start-pipeline stamps sourceSessionId from CLAUDE_SESSION_ID" {
-  export CLAUDE_SESSION_ID="sess-A"
+@test "start-pipeline stamps sourceSessionId from CLAUDE_CODE_SESSION_ID" {
+  export CLAUDE_CODE_SESSION_ID="sess-A"
   PID="$("$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'a')"
   [ "$(jq -r .sourceSessionId ".atelier/pipelines/$PID/pipeline-state.json")" = "sess-A" ]
 }
 
-@test "start-pipeline fails when CLAUDE_SESSION_ID is unset" {
-  run env -u CLAUDE_SESSION_ID "$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'a'
+@test "start-pipeline fails when CLAUDE_CODE_SESSION_ID is unset" {
+  run env -u CLAUDE_CODE_SESSION_ID "$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'a'
   [ "$status" -ne 0 ]
-  [[ "$output" == *"CLAUDE_SESSION_ID"* ]]
+  [[ "$output" == *"CLAUDE_CODE_SESSION_ID"* ]]
 }
 
 @test ".atelier/active-pipeline is never written" {
-  export CLAUDE_SESSION_ID="sess-A"
+  export CLAUDE_CODE_SESSION_ID="sess-A"
   PID="$("$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'a')"
   [ ! -f .atelier/active-pipeline ]
   "$ATELIER_CC_ROOT/scripts/resume.sh" "$PID" >/dev/null 2>&1 || true
@@ -29,16 +29,16 @@ teardown() { rm -rf "$TMP"; }
 }
 
 @test "find_owned_pipeline returns the session's running pipeline" {
-  export CLAUDE_SESSION_ID="sess-A"
+  export CLAUDE_CODE_SESSION_ID="sess-A"
   PID_A="$("$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'a')"
-  CLAUDE_SESSION_ID="sess-B" PID_B="$(CLAUDE_SESSION_ID=sess-B "$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'b')"
+  CLAUDE_CODE_SESSION_ID="sess-B" PID_B="$(CLAUDE_CODE_SESSION_ID=sess-B "$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'b')"
   [ "$(find_owned_pipeline "$TMP" sess-A)" = "$PID_A" ]
   [ "$(find_owned_pipeline "$TMP" sess-B)" = "$PID_B" ]
   [ -z "$(find_owned_pipeline "$TMP" sess-ghost)" ]
 }
 
 @test "find_owned_pipeline ignores completed/idle/stuck pipelines" {
-  export CLAUDE_SESSION_ID="sess-A"
+  export CLAUDE_CODE_SESSION_ID="sess-A"
   PID="$("$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'a')"
   ps_set_status "$TMP" "$PID" "completed"
   [ -z "$(find_owned_pipeline "$TMP" sess-A)" ]
@@ -49,7 +49,7 @@ teardown() { rm -rf "$TMP"; }
 }
 
 @test "find_owned_pipeline picks most-recent on duplicate ownership (warns)" {
-  export CLAUDE_SESSION_ID="sess-A"
+  export CLAUDE_CODE_SESSION_ID="sess-A"
   PID_OLD="$("$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'old')"
   sleep 0.05
   PID_NEW="$("$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'new')"
@@ -63,24 +63,24 @@ teardown() { rm -rf "$TMP"; }
 }
 
 @test "resume.sh transfers ownership to the resuming session" {
-  CLAUDE_SESSION_ID="sess-A" PID="$(CLAUDE_SESSION_ID=sess-A "$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'a')"
+  CLAUDE_CODE_SESSION_ID="sess-A" PID="$(CLAUDE_CODE_SESSION_ID=sess-A "$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'a')"
   ps_update "$TMP" "$PID" '.status = "idle"'
-  CLAUDE_SESSION_ID="sess-B" "$ATELIER_CC_ROOT/scripts/resume.sh" "$PID"
+  CLAUDE_CODE_SESSION_ID="sess-B" "$ATELIER_CC_ROOT/scripts/resume.sh" "$PID"
   [ "$(jq -r .sourceSessionId ".atelier/pipelines/$PID/pipeline-state.json")" = "sess-B" ]
 }
 
 @test "restart-stage.sh transfers ownership to the restarting session" {
-  PID="$(CLAUDE_SESSION_ID=sess-A "$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'a')"
+  PID="$(CLAUDE_CODE_SESSION_ID=sess-A "$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'a')"
   ps_update "$TMP" "$PID" '.type = "feature"'
-  CLAUDE_SESSION_ID="sess-B" "$ATELIER_CC_ROOT/scripts/restart-stage.sh" "$PID" "brainstorm"
+  CLAUDE_CODE_SESSION_ID="sess-B" "$ATELIER_CC_ROOT/scripts/restart-stage.sh" "$PID" "brainstorm"
   [ "$(jq -r .sourceSessionId ".atelier/pipelines/$PID/pipeline-state.json")" = "sess-B" ]
   [ "$(jq -r .status ".atelier/pipelines/$PID/pipeline-state.json")" = "running" ]
 }
 
-@test "restart-stage.sh fails when CLAUDE_SESSION_ID is unset" {
-  PID="$(CLAUDE_SESSION_ID=sess-A "$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'a')"
+@test "restart-stage.sh fails when CLAUDE_CODE_SESSION_ID is unset" {
+  PID="$(CLAUDE_CODE_SESSION_ID=sess-A "$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'a')"
   ps_update "$TMP" "$PID" '.type = "feature"'
-  run env -u CLAUDE_SESSION_ID "$ATELIER_CC_ROOT/scripts/restart-stage.sh" "$PID" "brainstorm"
+  run env -u CLAUDE_CODE_SESSION_ID "$ATELIER_CC_ROOT/scripts/restart-stage.sh" "$PID" "brainstorm"
   [ "$status" -ne 0 ]
-  [[ "$output" == *"CLAUDE_SESSION_ID"* ]]
+  [[ "$output" == *"CLAUDE_CODE_SESSION_ID"* ]]
 }

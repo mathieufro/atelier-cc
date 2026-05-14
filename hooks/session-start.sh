@@ -25,14 +25,29 @@ for sp in "$pdir"/*/pipeline-state.json; do
   # Heartbeat-based crash recovery: demote running → idle only when the heartbeat
   # is stale (>120s). Preserves actively-running pipelines owned by parallel
   # sessions. Stuck pipelines stay stuck — set deliberately by routing.
-  [ "$status" = "running" ] || continue
-  hb="$(jq -r '.lastHeartbeatMs // .createdAt // 0' "$sp")"
-  age=$((now_ms - hb))
-  if [ "$age" -ge "$HB_STALE_MS" ]; then
-    ps_update "$wsp" "$pid" \
-      '.status = "idle" |
-       .stages |= map(if .status == "running" then . + {status:"idle"} else . end)' \
-      || continue
+  if [ "$status" = "running" ]; then
+    hb="$(jq -r '.lastHeartbeatMs // .createdAt // 0' "$sp")"
+    age=$((now_ms - hb))
+    if [ "$age" -ge "$HB_STALE_MS" ]; then
+      ps_update "$wsp" "$pid" \
+        '.status = "idle" |
+         .stages |= map(if .status == "running" then . + {status:"idle"} else . end)' \
+        || continue
+    fi
+    continue
+  fi
+  # Drift cleanup: an idle pipeline must not have running stage rows — that
+  # combination is an invariant violation (caused by abort races, manual edits,
+  # or pre-existing state from older versions) and would cause the Stop hook's
+  # stage-in-progress guard to wedge any subsequent resume. Stuck pipelines are
+  # excluded deliberately so routing diagnostics aren't silently erased.
+  if [ "$status" = "idle" ]; then
+    orphans="$(jq '[(.stages // [])[] | select(.status == "running")] | length' "$sp" 2>/dev/null)"
+    if [ "${orphans:-0}" -gt 0 ]; then
+      ps_update "$wsp" "$pid" \
+        '.stages |= map(if .status == "running" then . + {status:"idle", interrupted:true} else . end)' \
+        || continue
+    fi
   fi
 done
 

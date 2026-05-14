@@ -4,7 +4,7 @@ load "${BATS_TEST_DIRNAME}/../fixtures/test-helpers.bash"
 setup() {
   source "$BATS_TEST_DIRNAME/../../lib/common.sh"
   source "$BATS_TEST_DIRNAME/../../lib/pipeline-state.sh"
-  export CLAUDE_SESSION_ID="sess-t"
+  export CLAUDE_CODE_SESSION_ID="sess-t"
   TMP="$(mktemp -d)"; cd "$TMP"; mkdir .git
   export ATELIER_CC_ROOT="$BATS_TEST_DIRNAME/../.."
   backup_skill writing-plans

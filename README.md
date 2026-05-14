@@ -87,7 +87,7 @@ From the monorepo root: `bun run test:plugin`.
 
 ## Multi-session safety (v1.1 — landed)
 
-Multiple Claude Code sessions can run in parallel — same workspace (each session drives its own pipeline) or different workspaces (full isolation). State mutations protect via per-file `mkdir` lockfiles; pipeline ownership tracks via `sourceSessionId` (stamped from `$CLAUDE_SESSION_ID` on start/resume/restart); signals carry explicit `pipelineId`. Crash recovery is heartbeat-driven (`lastHeartbeatMs`, default stale threshold 120s).
+Multiple Claude Code sessions can run in parallel — same workspace (each session drives its own pipeline) or different workspaces (full isolation). State mutations protect via per-file `mkdir` lockfiles; pipeline ownership tracks via `sourceSessionId` (stamped from `$CLAUDE_CODE_SESSION_ID` on start/resume/restart); signals carry explicit `pipelineId`. Crash recovery is heartbeat-driven (`lastHeartbeatMs`, default stale threshold 120s).
 
 **Contract:** one pipeline per session. Run multiple pipelines in parallel by opening multiple CC sessions.
 

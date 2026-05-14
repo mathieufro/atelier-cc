@@ -7,7 +7,7 @@ require_jq
 
 prompt="${1:-}"
 [ -n "$prompt" ] || die "usage: start-pipeline.sh \"<prompt>\""
-[ -n "${CLAUDE_SESSION_ID:-}" ] || die "CLAUDE_SESSION_ID env var is required"
+[ -n "${CLAUDE_CODE_SESSION_ID:-}" ] || die "CLAUDE_CODE_SESSION_ID env var is required"
 
 wsp="$(find_workspace_root)"
 
@@ -35,7 +35,7 @@ done
 # the user picks a pipeline type via AskUserQuestion. Stop hook treats null type
 # as "awaiting classify" and exits without routing.
 ps_init "$wsp" "$pid" "$prompt" ""
-ps_update "$wsp" "$pid" '.sourceSessionId = $sid' --arg sid "$CLAUDE_SESSION_ID"
+ps_update "$wsp" "$pid" '.sourceSessionId = $sid' --arg sid "$CLAUDE_CODE_SESSION_ID"
 
 # Post-condition: pipeline-state.json MUST exist after ps_init. If it doesn't,
 # something is very wrong (filesystem, jq, lock contention) — fail loud rather

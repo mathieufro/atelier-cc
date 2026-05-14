@@ -5,7 +5,7 @@ setup() {
   cd "$TMP"
   mkdir -p .git
   export ATELIER_CC_ROOT="$BATS_TEST_DIRNAME/../.."
-  export CLAUDE_SESSION_ID="sess-t"
+  export CLAUDE_CODE_SESSION_ID="sess-t"
 }
 teardown() { rm -rf "$TMP"; }
 

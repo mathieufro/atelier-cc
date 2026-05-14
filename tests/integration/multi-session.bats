@@ -31,8 +31,8 @@ drive_one_for_session() {
 }
 
 @test "two parallel sessions on one workspace each complete their pipeline" {
-  PID_A="$(CLAUDE_SESSION_ID=sess-A "$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'A')"
-  PID_B="$(CLAUDE_SESSION_ID=sess-B "$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'B')"
+  PID_A="$(CLAUDE_CODE_SESSION_ID=sess-A "$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'A')"
+  PID_B="$(CLAUDE_CODE_SESSION_ID=sess-B "$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'B')"
   ps_update "$TMP" "$PID_A" '.type = "plan" | .worktreeChoice = "in-tree"'
   ps_update "$TMP" "$PID_B" '.type = "plan" | .worktreeChoice = "in-tree"'
   for _ in $(seq 1 8); do
@@ -47,7 +47,7 @@ drive_one_for_session() {
 }
 
 @test "concurrent ps_update bursts across two sessions: no lost writes" {
-  PID="$(CLAUDE_SESSION_ID=sess-A "$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'shared')"
+  PID="$(CLAUDE_CODE_SESSION_ID=sess-A "$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'shared')"
   ps_update "$TMP" "$PID" '.stepCounter = 0'
   for i in $(seq 1 30); do
     ( ps_update "$TMP" "$PID" '.stepCounter = ((.stepCounter // 0) + 1)' ) &

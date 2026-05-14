@@ -7,9 +7,16 @@ setup() {
   MONOREPO_ROOT="$ATELIER_CC_ROOT/.."
 }
 
-@test "after sync, plugin's skills/ is byte-equivalent to atelier/skills/" {
+@test "after sync, plugin's skills/ is byte-equivalent to atelier/skills/ (modulo exclusion list)" {
   bash "$ATELIER_CC_ROOT/scripts/sync-skills.sh"
-  diff -r "$ATELIER_REPO/skills" "$ATELIER_CC_ROOT/skills"
+  # sync-skills.sh deliberately omits upstream skills that don't apply to the
+  # CC plugin (see EXCLUDE in scripts/sync-skills.sh). Pass them as --exclude
+  # to diff so the test reflects what sync actually promises.
+  diff -r \
+    --exclude=benchmarking \
+    --exclude=ralph-loop-help \
+    --exclude=responding \
+    "$ATELIER_REPO/skills" "$ATELIER_CC_ROOT/skills"
 }
 
 @test "pre-commit installer creates an executable hook" {

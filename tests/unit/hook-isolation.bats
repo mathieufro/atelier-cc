@@ -13,8 +13,8 @@ setup() {
   {"name":"$FIRST_STAGE","mode":"interactive","skill":"brainstorming","requiresArtifact":true}
 ]}
 EOF
-  PID_A="$(CLAUDE_SESSION_ID=sess-A "$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'a')"
-  PID_B="$(CLAUDE_SESSION_ID=sess-B "$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'b')"
+  PID_A="$(CLAUDE_CODE_SESSION_ID=sess-A "$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'a')"
+  PID_B="$(CLAUDE_CODE_SESSION_ID=sess-B "$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'b')"
   ps_update "$TMP" "$PID_A" '.type = "feature"'
   ps_update "$TMP" "$PID_B" '.type = "feature"'
 }

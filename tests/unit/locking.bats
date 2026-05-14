@@ -5,7 +5,7 @@ setup() {
   source "$BATS_TEST_DIRNAME/../../lib/pipeline-state.sh"
   TMP="$(mktemp -d)"; cd "$TMP"; mkdir .git
   export ATELIER_CC_ROOT="$BATS_TEST_DIRNAME/../.."
-  export CLAUDE_SESSION_ID="sess-t"
+  export CLAUDE_CODE_SESSION_ID="sess-t"
   PID="$($ATELIER_CC_ROOT/scripts/start-pipeline.sh 'lock')"
   ps_update "$TMP" "$PID" '.type = "feature"'
 }

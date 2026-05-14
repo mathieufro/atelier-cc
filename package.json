@@ -9,6 +9,7 @@
     "url": "https://github.com/mathieufro/atelier-cc"
   },
   "type": "module",
+  "private": true,
   "scripts": {
     "test": "tests/bats/bin/bats tests/unit tests/integration tests/regression"
   }

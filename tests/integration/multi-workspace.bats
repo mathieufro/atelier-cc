@@ -12,8 +12,8 @@ setup() {
 teardown() { rm -rf "$WSP_A" "$WSP_B"; }
 
 @test "two workspaces with independent pipelines stay isolated" {
-  cd "$WSP_A"; PID_A="$(CLAUDE_SESSION_ID=sess-A "$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'A')"
-  cd "$WSP_B"; PID_B="$(CLAUDE_SESSION_ID=sess-B "$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'B')"
+  cd "$WSP_A"; PID_A="$(CLAUDE_CODE_SESSION_ID=sess-A "$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'A')"
+  cd "$WSP_B"; PID_B="$(CLAUDE_CODE_SESSION_ID=sess-B "$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'B')"
   [ -d "$WSP_A/.atelier/pipelines/$PID_A" ] && [ ! -d "$WSP_A/.atelier/pipelines/$PID_B" ]
   [ -d "$WSP_B/.atelier/pipelines/$PID_B" ] && [ ! -d "$WSP_B/.atelier/pipelines/$PID_A" ]
   [ "$(find_owned_pipeline "$WSP_A" sess-A)" = "$PID_A" ]

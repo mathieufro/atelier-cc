@@ -5,7 +5,7 @@ setup() {
   cd "$TMP"
   mkdir -p .git
   export ATELIER_CC_ROOT="$BATS_TEST_DIRNAME/../.."
-  export CLAUDE_SESSION_ID="sess-t"
+  export CLAUDE_CODE_SESSION_ID="sess-t"
   mkdir -p .atelier/pipelines/2026-05-14-existing-b8d2
   printf 'plan body\n' > .atelier/pipelines/2026-05-14-existing-b8d2/plan.md
   printf 'review body\n' > .atelier/pipelines/2026-05-14-existing-b8d2/plan-review.md
@@ -84,9 +84,9 @@ teardown() { rm -rf "$TMP"; }
   rm -rf "$OTHER"
 }
 
-@test "attach-pipeline picks up CLAUDE_CODE_SESSION_ID when CLAUDE_SESSION_ID is unset" {
+@test "attach-pipeline picks up CLAUDE_CODE_SESSION_ID when CLAUDE_CODE_SESSION_ID is unset" {
   # Claude Code's env var was renamed; common.sh normalizes the legacy name.
-  unset CLAUDE_SESSION_ID
+  unset CLAUDE_CODE_SESSION_ID
   export CLAUDE_CODE_SESSION_ID="sess-renamed"
   pid="$("$ATELIER_CC_ROOT/scripts/attach-pipeline.sh" 2026-05-14-existing-b8d2 'x')"
   [ "$(jq -r .sourceSessionId ".atelier/pipelines/$pid/pipeline-state.json")" = "sess-renamed" ]

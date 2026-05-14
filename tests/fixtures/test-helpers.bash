@@ -32,7 +32,7 @@ restore_skill() {
 drive_one_iteration() {
   local wsp="$1" pid="$2"
   local sp="$wsp/.atelier/pipelines/$pid/pipeline-state.json"
-  local sid="${CLAUDE_SESSION_ID:-sess-t}"
+  local sid="${CLAUDE_CODE_SESSION_ID:-sess-t}"
 
   local decision
   decision="$(printf '{"cwd":"%s","session_id":"%s"}' "$wsp" "$sid" | "$ATELIER_CC_ROOT/hooks/stop.sh" || true)"

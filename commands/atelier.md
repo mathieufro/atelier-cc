@@ -9,7 +9,7 @@ You are the Atelier dispatcher. `$ARGUMENTS` contains the user's input.
 
 Use `Bash` to enumerate existing pipelines: `ls -1 .atelier/pipelines/ 2>/dev/null` and for each one, `jq -r '"\(.id)\t\(.prompt)\t\(.status)\t\(.currentStage)\t\(.type)\t\(.expectedMode // "")\t\(.sourceSessionId // "")"' .atelier/pipelines/<id>/pipeline-state.json`. Keep this list mentally — you'll fuzzy-match against `prompt` for resume/restart.
 
-The pipeline owned by THIS Claude Code session is the (at-most-one) row where `sourceSessionId == $CLAUDE_SESSION_ID AND status == "running"`. That's the "active" pipeline for this session. Other sessions may concurrently own their own pipelines on the same workspace; they appear in the list but are not yours to act on by default.
+The pipeline owned by THIS Claude Code session is the (at-most-one) row where `sourceSessionId == $CLAUDE_CODE_SESSION_ID AND status == "running"`. That's the "active" pipeline for this session. Other sessions may concurrently own their own pipelines on the same workspace; they appear in the list but are not yours to act on by default.
 
 **Active-pipeline guard.** If THIS session owns a pipeline AND its `expectedMode == "interactive"` AND `$ARGUMENTS` looks like a new task (not "resume", "status", "abort", or "redirect"), this is most likely the user accidentally typing while an interactive stage is mid-conversation. Use AskUserQuestion to confirm before starting a new pipeline:
 - header: `Active pipeline`
@@ -37,7 +37,7 @@ If the intent is ambiguous, use AskUserQuestion with the two possibilities as op
 
 ### New task
 
-1. Run `Bash`: `bash ${CLAUDE_PLUGIN_ROOT}/scripts/start-pipeline.sh "<the task description>"` — capture the pipeline id from stdout. The script requires `$CLAUDE_SESSION_ID` (Claude Code sets this).
+1. Run `Bash`: `bash ${CLAUDE_PLUGIN_ROOT}/scripts/start-pipeline.sh "<the task description>"` — capture the pipeline id from stdout. The script requires `$CLAUDE_CODE_SESSION_ID` (Claude Code sets this).
 2. Run `Bash`: `bash ${CLAUDE_PLUGIN_ROOT}/scripts/list-topologies.sh` — parse the output (one `name<TAB>description` per line).
 3. AskUserQuestion #1 — header `Pipeline`, question "Which pipeline type fits this task?", options dynamically built: one option per topology with `label = description`, `value = name`. Up to 4 options.
 4. AskUserQuestion #2 — header `Worktree`, question "Run in a separate git worktree, or in the current tree?", options: `worktree` ("Isolate work in a git worktree"), `in-tree` ("Work in the current branch").
@@ -47,14 +47,14 @@ If the intent is ambiguous, use AskUserQuestion with the two possibilities as op
 
 1. From the pipeline list, fuzzy-match $ARGUMENTS (minus "resume" prefix) against each `prompt`.
 2. If exactly one match → use it. If multiple matches → AskUserQuestion with the candidate prompts. If zero matches → tell the user "No matching pipeline." and end turn.
-3. Run `Bash`: `bash ${CLAUDE_PLUGIN_ROOT}/scripts/resume.sh <pipeline-id>`. The script requires `$CLAUDE_SESSION_ID` and stamps the resumed pipeline's `sourceSessionId` to this session — transferring ownership.
+3. Run `Bash`: `bash ${CLAUDE_PLUGIN_ROOT}/scripts/resume.sh <pipeline-id>`. The script requires `$CLAUDE_CODE_SESSION_ID` and stamps the resumed pipeline's `sourceSessionId` to this session — transferring ownership.
 4. Print "Resumed pipeline `<id>` at stage `<stage>` — re-dispatching now." Then **end your turn. DO NOT call `atelier_signal`.** `resume.sh` has set `status=running` and refreshed `sourceSessionId`; the Stop hook will fire at end-of-turn, read `lastVerdict` as-is (typically `null` because the crashed stage never signaled), and re-dispatch the same stage. The re-dispatched stage agent will read `progress.md` and continue from where it left off.
 
 ### Restart from stage
 
 1. Parse the stage name from $ARGUMENTS (the word after "back to" / "restart from" / "redo").
 2. If this session owns no pipeline, ask the user to specify which pipeline (via AskUserQuestion listing recent pipelines).
-3. Run `Bash`: `bash ${CLAUDE_PLUGIN_ROOT}/scripts/restart-stage.sh <pipeline-id> <stage>`. The script requires `$CLAUDE_SESSION_ID` and transfers ownership to this session.
+3. Run `Bash`: `bash ${CLAUDE_PLUGIN_ROOT}/scripts/restart-stage.sh <pipeline-id> <stage>`. The script requires `$CLAUDE_CODE_SESSION_ID` and transfers ownership to this session.
 4. Print "Restarting pipeline `<id>` at stage `<stage>`." Then **end your turn. DO NOT call `atelier_signal`.** `restart-stage.sh` already cleared `lastVerdict` and set `currentStage`; the Stop hook will fire at end-of-turn and dispatch the target stage fresh.
 
 ### Start at stage
@@ -82,7 +82,7 @@ Creates a pipeline whose first dispatched stage is the one the user named — us
 
 ### Status
 
-Read all `pipeline-state.json` files; print a markdown table: `| id | type | status | currentStage | prompt | sourceSessionId | mine? |` where `mine?` is `(mine)` when `sourceSessionId == $CLAUDE_SESSION_ID` and empty otherwise. This makes cross-session pipelines visible without confusing them with this session's own work. End turn — DO NOT signal.
+Read all `pipeline-state.json` files; print a markdown table: `| id | type | status | currentStage | prompt | sourceSessionId | mine? |` where `mine?` is `(mine)` when `sourceSessionId == $CLAUDE_CODE_SESSION_ID` and empty otherwise. This makes cross-session pipelines visible without confusing them with this session's own work. End turn — DO NOT signal.
 
 ### Abort
 
@@ -93,7 +93,7 @@ Determine pipeline id (this session's owned pipeline if present, else AskUserQue
 For inline `/atelier <guidance>` issued mid-pipeline (active stage running, user wants to adjust direction):
 
 1. Read state.expectedMode and currentStage from this session's owned pipeline's `pipeline-state.json`.
-2. Update state with `pendingRedirect` = `<guidance>` via `Bash`: `bash ${CLAUDE_PLUGIN_ROOT}/scripts/redirect.sh "<guidance>"`. The script resolves the owned pipeline via `$CLAUDE_SESSION_ID`; do NOT pass a pipeline id.
+2. Update state with `pendingRedirect` = `<guidance>` via `Bash`: `bash ${CLAUDE_PLUGIN_ROOT}/scripts/redirect.sh "<guidance>"`. The script resolves the owned pipeline via `$CLAUDE_CODE_SESSION_ID`; do NOT pass a pipeline id.
 3. Path A (preferred, UX improvement): try SendMessage to the active subagent session with the guidance.
 4. Path B (fallback, sufficient): instruct user that the redirect is queued and will be consumed on next stage dispatch via the RESUMING block in compile-prompt.sh. End your turn — DO NOT signal.
 

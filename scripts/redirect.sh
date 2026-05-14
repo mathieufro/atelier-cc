@@ -6,10 +6,10 @@ source "$ROOT/lib/pipeline-state.sh"
 require_jq
 guidance="${1:-}"
 [ -n "$guidance" ] || die "usage: redirect.sh \"<guidance>\""
-[ -n "${CLAUDE_SESSION_ID:-}" ] || die "CLAUDE_SESSION_ID env var is required"
+[ -n "${CLAUDE_CODE_SESSION_ID:-}" ] || die "CLAUDE_CODE_SESSION_ID env var is required"
 wsp="$(find_workspace_root)"
-pid="$(find_owned_pipeline "$wsp" "$CLAUDE_SESSION_ID")"
-[ -n "$pid" ] || die "no active pipeline owned by session $CLAUDE_SESSION_ID"
+pid="$(find_owned_pipeline "$wsp" "$CLAUDE_CODE_SESSION_ID")"
+[ -n "$pid" ] || die "no active pipeline owned by session $CLAUDE_CODE_SESSION_ID"
 target_session="$(ps_read "$wsp" "$pid" '.stages[-1].sessionId // empty' -r)"
 now="$(epoch_ms)"
 ps_update "$wsp" "$pid" \

@@ -17,7 +17,7 @@ require_jq
 
 dir="${1:-}"; prompt="${2:-}"
 [ -n "$dir" ] && [ -n "$prompt" ] || die "usage: attach-pipeline.sh <pipeline-dir-or-id> \"<prompt>\""
-[ -n "${CLAUDE_SESSION_ID:-}" ] || die "CLAUDE_SESSION_ID env var is required"
+[ -n "${CLAUDE_CODE_SESSION_ID:-}" ] || die "CLAUDE_CODE_SESSION_ID env var is required"
 
 # Resolve $dir to an absolute pipeline directory. Accept three input shapes:
 #   1. Path to a pipeline directory                (.../.atelier/pipelines/<id>)
@@ -51,7 +51,7 @@ wsp="$(dirname "$(dirname "$parent_abs")")"
 # pre-classify type stays null; the caller (dispatcher) will signal type +
 # worktreeChoice + currentStage via mcp__atelier__atelier_signal next.
 ps_init "$wsp" "$pid" "$prompt" ""
-ps_update "$wsp" "$pid" '.sourceSessionId = $sid' --arg sid "$CLAUDE_SESSION_ID"
+ps_update "$wsp" "$pid" '.sourceSessionId = $sid' --arg sid "$CLAUDE_CODE_SESSION_ID"
 
 sp="$pdir/pipeline-state.json"
 [ -f "$sp" ] || die "ps_init did not create $sp — refusing to continue"

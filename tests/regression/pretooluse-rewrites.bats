@@ -4,7 +4,7 @@
   source "$BATS_TEST_DIRNAME/../../lib/common.sh"
   source "$BATS_TEST_DIRNAME/../../lib/pipeline-state.sh"
   TMP="$(mktemp -d)"; cd "$TMP"; mkdir .git
-  export CLAUDE_SESSION_ID="sess-t"
+  export CLAUDE_CODE_SESSION_ID="sess-t"
   PID="$($BATS_TEST_DIRNAME/../../scripts/start-pipeline.sh 'x')"
   ps_update "$TMP" "$PID" '.currentStage = "implement" | .expectedSkill = "implementing-plans" |
     .expectedMode = "autonomous" | .expectedSubagent = "atelier:atelier-stage-worker"'
