@@ -127,3 +127,32 @@ TOPOLOGY='{
   [ "$(echo "$result" | jq -r .newStatus)" = "stuck" ]
   [[ "$(echo "$result" | jq -r .error)" == *"without signaling"* ]]
 }
+
+# Recovery paths: any non-running terminal status with verdict=null means someone
+# cleared the verdict to ask for a fresh dispatch (restart-stage, resume after
+# subagent-stop, manual repair). Routing must self-recover, not wedge.
+
+@test "verdict=null with stage status=completed: re-dispatch fresh (restart-stage path)" {
+  state='{"currentStage":"implement","lastVerdict":null,"fixAttempts":{},"stages":[{"id":"i1","stage":"implement","status":"completed","verdict":"done"}]}'
+  result="$(routing_decide "$state" "$TOPOLOGY")"
+  [ "$(echo "$result" | jq -r .kind)" = "dispatch" ]
+  [ "$(echo "$result" | jq -r .stage.name)" = "implement" ]
+}
+
+@test "verdict=null with stage status=skipped: re-dispatch fresh" {
+  state='{"currentStage":"implement","lastVerdict":null,"fixAttempts":{},"stages":[{"id":"i1","stage":"implement","status":"skipped","interrupted":true}]}'
+  result="$(routing_decide "$state" "$TOPOLOGY")"
+  [ "$(echo "$result" | jq -r .kind)" = "dispatch" ]
+  [ "$(echo "$result" | jq -r .stage.name)" = "implement" ]
+}
+
+@test "verdict=null with stage status=stuck: pause (don't auto-retry crashed subagent)" {
+  # Stuck on the last stage row means subagent-stop.sh already recorded a crash.
+  # Auto-redispatching here would loop forever on a deterministically-crashing
+  # subagent. resume.sh demotes stuck → idle to opt back into dispatch.
+  state='{"currentStage":"implement","lastVerdict":null,"fixAttempts":{},"stages":[{"id":"i1","stage":"implement","status":"stuck","error":"subagent terminated without signaling"}]}'
+  result="$(routing_decide "$state" "$TOPOLOGY")"
+  [ "$(echo "$result" | jq -r .kind)" = "pause" ]
+  [ "$(echo "$result" | jq -r .newStatus)" = "stuck" ]
+  [[ "$(echo "$result" | jq -r .error)" == *"without signaling"* ]]
+}

@@ -10,15 +10,16 @@ pid="${1:-}"
 wsp="$(find_workspace_root)"
 sp="$(ps_path "$wsp" "$pid")"
 [ -f "$sp" ] || die "pipeline not found: $pid"
-# Drift-tolerant resume: in addition to flipping status, also demote any
-# trailing/orphan stage rows still marked "running" to "idle". Without this,
-# the Stop hook's stage-in-progress guard (last.status=="running" && empty
-# verdict) short-circuits forever and the pipeline can never re-dispatch.
-# Normally SessionStart's crash-recovery does this demotion, but it only runs
-# on status="running" pipelines with stale heartbeat — drift can land us at
-# (status=idle, stages[-1]=running) via abort races, manual edits, or
-# pre-existing state files.
+# Drift-tolerant resume: in addition to flipping status, demote any trailing
+# stage rows marked "running" OR "stuck" to "idle". Without this, routing's
+# crash-detection (last row running/stuck + verdict=null) short-circuits to
+# "pause stuck" forever and the pipeline can never re-dispatch. Resume is the
+# explicit user signal to retry — clearing stuck here makes the subsequent
+# Stop-hook dispatch proceed instead of immediately re-stucking. Normally
+# SessionStart's crash-recovery handles running rows on stale-heartbeat
+# pipelines, but drift can land us at (status=idle/stuck, last=running/stuck)
+# via abort races, manual edits, or pre-existing state files.
 ps_update "$wsp" "$pid" \
   '.status = "running" | .error = null | .sourceSessionId = $sid |
-   .stages |= map(if .status == "running" then . + {status:"idle", interrupted:true} else . end)' \
+   .stages |= map(if (.status == "running" or .status == "stuck") then . + {status:"idle", interrupted:true} else . end)' \
   --arg sid "$CLAUDE_CODE_SESSION_ID"

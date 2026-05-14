@@ -50,10 +50,19 @@ routing_decide() {
     null|"")
       local last_status; last_status="$(printf '%s' "$state" | jq -r --arg c "$current" '
         ((.stages // []) | map(select(.stage == $c)) | last // {}).status // empty')"
-      if [ -z "$last_status" ] || [ "$last_status" = "idle" ]; then
-        _routing_emit dispatch "$stage" "" "" "running" ""
-      else
+      # A row marked "running" or "stuck" with a cleared verdict indicates a
+      # crashed subagent (running = mid-flight death; stuck = subagent-stop.sh
+      # already recorded it). Pause and wait for explicit resume — auto-retry
+      # would loop forever on a deterministically-crashing subagent.
+      # Other states (empty/idle/completed/skipped) with verdict=null mean the
+      # prior run is terminal and someone (resume.sh, restart-stage.sh, manual
+      # repair) has asked for a fresh dispatch — handle them uniformly so weird
+      # states (e.g. restart-stage leaving currentStage pointing at a completed
+      # row) self-recover instead of wedging the pipeline.
+      if [ "$last_status" = "running" ] || [ "$last_status" = "stuck" ]; then
         _routing_emit pause "null" "" "" "stuck" "subagent terminated without signaling at $current (last stage status: $last_status)"
+      else
+        _routing_emit dispatch "$stage" "" "" "running" ""
       fi
       ;;
     partial)

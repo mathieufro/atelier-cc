@@ -39,6 +39,20 @@ teardown() { rm -rf "$TMP"; }
   [ "$(echo "$state" | jq -r '.stages[-1].interrupted')" = "true" ]
 }
 
+@test "resume.sh demotes dangling stuck stage row (opts back into dispatch)" {
+  # subagent-stop.sh marks a crashed stage row stuck. Routing pauses on
+  # last_status=stuck to avoid auto-retry loops on deterministic crashes —
+  # resume.sh is the explicit retry signal, so it must demote stuck → idle.
+  ps_update "$TMP" "$PID" \
+    '.currentStage = "implement" | .lastVerdict = null |
+     .stages = [{"id":"s1","stage":"implement","status":"stuck","error":"subagent terminated without signaling"}]'
+  CLAUDE_CODE_SESSION_ID="sess-resumer" "$ATELIER_CC_ROOT/scripts/resume.sh" "$PID"
+  state="$(cat ".atelier/pipelines/$PID/pipeline-state.json")"
+  [ "$(echo "$state" | jq -r .status)" = "running" ]
+  [ "$(echo "$state" | jq -r '.stages[-1].status')" = "idle" ]
+  [ "$(echo "$state" | jq -r '.stages[-1].interrupted')" = "true" ]
+}
+
 @test "resume.sh leaves completed and idle stage rows untouched" {
   ps_update "$TMP" "$PID" \
     '.stages = [
