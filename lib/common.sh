@@ -10,6 +10,13 @@ if [ -z "${BASH_VERSINFO[0]:-}" ] || [ "${BASH_VERSINFO[0]}" -lt 4 ]; then
   exit 1
 fi
 
+# Claude Code's session-id env var was renamed at some point. Accept either
+# the legacy CLAUDE_SESSION_ID or the current CLAUDE_CODE_SESSION_ID, and
+# normalize so downstream scripts can keep reading CLAUDE_SESSION_ID without
+# caring which one Claude Code happens to set in the current release.
+: "${CLAUDE_SESSION_ID:=${CLAUDE_CODE_SESSION_ID:-}}"
+export CLAUDE_SESSION_ID
+
 die() {
   echo "atelier-cc: $*" >&2
   exit 1

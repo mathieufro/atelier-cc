@@ -19,23 +19,33 @@ dir="${1:-}"; prompt="${2:-}"
 [ -n "$dir" ] && [ -n "$prompt" ] || die "usage: attach-pipeline.sh <pipeline-dir-or-id> \"<prompt>\""
 [ -n "${CLAUDE_SESSION_ID:-}" ] || die "CLAUDE_SESSION_ID env var is required"
 
-wsp="$(find_workspace_root)"
-
-# Accept either a bare pipeline id (e.g. 2026-05-14-foo-b8d2) or a path to a dir
-# / file inside the pipeline dir. Normalize to the pipeline id.
+# Resolve $dir to an absolute pipeline directory. Accept three input shapes:
+#   1. Path to a pipeline directory                (.../.atelier/pipelines/<id>)
+#   2. Path to a file inside one                   (.../.atelier/pipelines/<id>/plan.md)
+#   3. Bare pipeline id resolved against CWD's workspace
+# CWD-based resolution is only the fallback for case 3 — we MUST derive the
+# workspace from the resolved directory, not from CWD, so the attach can target
+# a pipeline in a different workspace than the one the dispatcher is running in
+# (e.g. monorepo CWD attaching into a sibling project's .atelier/pipelines/).
 if [ -d "$dir" ]; then
-  pdir="$(cd "$dir" && pwd)"
+  pdir="$(cd "$dir" && pwd -P)"
 elif [ -f "$dir" ]; then
-  pdir="$(cd "$(dirname "$dir")" && pwd)"
-elif [ -d "$wsp/.atelier/pipelines/$dir" ]; then
-  pdir="$wsp/.atelier/pipelines/$dir"
+  pdir="$(cd "$(dirname "$dir")" && pwd -P)"
 else
-  die "not a pipeline dir, file, or known id: $dir"
+  cwd_wsp="$(find_workspace_root)"
+  if [ -d "$cwd_wsp/.atelier/pipelines/$dir" ]; then
+    pdir="$(cd "$cwd_wsp/.atelier/pipelines/$dir" && pwd -P)"
+  else
+    die "not a pipeline dir, file, or known id: $dir"
+  fi
 fi
 
 pid="$(basename "$pdir")"
-parent="$(basename "$(dirname "$pdir")")"
-[ "$parent" = "pipelines" ] || die "$pdir is not under .atelier/pipelines/"
+parent_abs="$(dirname "$pdir")"
+[ "$(basename "$parent_abs")" = "pipelines" ] || die "$pdir is not under .atelier/pipelines/"
+# wsp is the directory two levels above pdir: .../<wsp>/.atelier/pipelines/<id>
+wsp="$(dirname "$(dirname "$parent_abs")")"
+[ -d "$wsp/.atelier" ] || die "expected .atelier under derived workspace: $wsp"
 
 # Reuse ps_init: writes state.json into the dir, then we stamp ownership.
 # pre-classify type stays null; the caller (dispatcher) will signal type +
