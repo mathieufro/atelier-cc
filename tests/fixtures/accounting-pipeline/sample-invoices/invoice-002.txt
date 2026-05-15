@@ -1,0 +1,7 @@
+Fournisseur: Linear Software Inc.
+Date: 2026-03-01
+Piece: INV-LIN-9982
+Total HT: 240.00 EUR
+TVA 20%: 48.00 EUR
+Total TTC: 288.00 EUR
+Description: Abonnement Linear mensuel, équipe (12 utilisateurs)

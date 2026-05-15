@@ -1,0 +1,10 @@
+{
+  "name": "accounting",
+  "description": "French bookkeeping pipeline: invoices to CSV with compte assignment, review, fix, insert",
+  "stages": [
+    { "name": "collect_invoices",   "mode": "interactive", "skill": "collect-invoices",   "artifactType": "invoices",   "requiresArtifact": true },
+    { "name": "bookkeep_csv",       "mode": "autonomous",  "skill": "bookkeep-csv",       "artifactType": "csv",        "requiresArtifact": true },
+    { "name": "review_bookkeeping", "mode": "autonomous",  "skill": "review-bookkeeping", "reviewBehavior": "fix-bookkeeping", "artifactType": "review", "requiresArtifact": true },
+    { "name": "insert_bookkeeping", "mode": "autonomous",  "skill": "insert-bookkeeping", "artifactType": "ledger",     "requiresArtifact": true }
+  ]
+}

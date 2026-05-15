@@ -1,0 +1,9 @@
+- **Implement (session 1, 2026-05-15):** starting at T1.
+- [x] T1: skill_resolve helper + 6 unit tests, lib/skills.sh
+- [x] T2: dispatch.sh interactive branches use skill_resolve, hooks source lib/skills.sh
+- [x] T3: compile-prompt.sh uses skill_resolve for main + target skills
+- [x] T4: accounting fixture (topology + 5 skills + 3 invoices) under tests/fixtures/
+- [x] T5: tests/integration/custom-pipeline.bats — 5 cases all green
+- [x] T6: README "Custom Skills" section with accounting walkthrough
+- [x] T7: skills/create-pipeline + commands/pipeline-create.md (skill mirrored to atelier/skills upstream)
+- **Implement:** 7/7 done. Touched-area suites (39 tests across skills, dispatch, compile-prompt, custom-pipeline, pipeline-create, sync) all green. Pre-existing failures (18 tests in stop-hook/routing/feature/epic/plan/task/redirect) depend on the `timeout` binary which is not installed in this dev env — unrelated to these changes.

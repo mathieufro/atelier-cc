@@ -27,6 +27,6 @@ teardown() { rm -rf "$TMP"; }
   done
   [ "$(jq -r .status ".atelier/pipelines/$PID/pipeline-state.json")" = "completed" ]
 
-  ls "$TMP/.atelier/pipelines/$PID"/*quick_plan*.md
-  ls "$TMP/.atelier/pipelines/$PID"/*review_quick_plan*.md
+  ls "$TMP/.atelier/pipelines/$PID"/*-plan.md
+  ls "$TMP/.atelier/pipelines/$PID"/*-plan-review.md
 }

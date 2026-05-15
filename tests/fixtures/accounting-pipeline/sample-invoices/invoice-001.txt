@@ -1,0 +1,7 @@
+Fournisseur: Acme Office Supplies
+Date: 2026-03-12
+Piece: FAC-2026-0312-001
+Total HT: 145.00 EUR
+TVA 20%: 29.00 EUR
+Total TTC: 174.00 EUR
+Description: Cartouches d'encre imprimante, ramettes papier A4

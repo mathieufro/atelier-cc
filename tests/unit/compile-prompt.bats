@@ -152,3 +152,42 @@ EOF
   out="$("$ATELIER_CC_ROOT/scripts/compile-prompt.sh" "$PID" "write_plan")"
   [[ "$out" != *"<stage-skill-reference>"* ]]
 }
+
+@test "compile-prompt embeds user-local custom skill body for autonomous stage" {
+  FAKE_HOME="$(mktemp -d)"
+  export HOME="$FAKE_HOME"
+  mkdir -p "$HOME/.atelier/skills/bookkeep-csv"
+  cat > "$HOME/.atelier/skills/bookkeep-csv/SKILL.md" <<'EOF'
+---
+name: bookkeep-csv
+---
+# Bookkeep
+USER-CUSTOM-BOOKKEEP-MARKER
+EOF
+  mkdir -p "$TMP/.atelier/topologies"
+  cat > "$TMP/.atelier/topologies/acct.json" <<EOF
+{"name":"acct","description":"t","stages":[{"name":"bookkeep","mode":"autonomous","skill":"bookkeep-csv","artifactType":"csv","requiresArtifact":true}]}
+EOF
+  ps_update "$TMP" "$PID" '.type = "acct" | .currentStage = "bookkeep" | .expectedSkill = "bookkeep-csv"'
+  out="$("$ATELIER_CC_ROOT/scripts/compile-prompt.sh" "$PID" "bookkeep")"
+  [[ "$out" == *"USER-CUSTOM-BOOKKEEP-MARKER"* ]]
+  rm -rf "$FAKE_HOME"
+}
+
+@test "compile-prompt embeds user-local target-skill override for compile stages" {
+  FAKE_HOME="$(mktemp -d)"
+  export HOME="$FAKE_HOME"
+  mkdir -p "$HOME/.atelier/skills/writing-plans"
+  cat > "$HOME/.atelier/skills/writing-plans/SKILL.md" <<'EOF'
+---
+name: writing-plans
+---
+# Custom Plan Writer
+TARGET-SKILL-OVERRIDE-MARKER
+EOF
+  ps_update "$TMP" "$PID" \
+    '.type = "feature" | .currentStage = "compile_plan" | .expectedSkill = "compiling-plan"'
+  out="$("$ATELIER_CC_ROOT/scripts/compile-prompt.sh" "$PID" "compile_plan")"
+  [[ "$out" == *"TARGET-SKILL-OVERRIDE-MARKER"* ]]
+  rm -rf "$FAKE_HOME"
+}

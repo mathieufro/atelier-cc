@@ -4,6 +4,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "$ROOT/lib/common.sh"
 source "$ROOT/lib/pipeline-state.sh"
 source "$ROOT/lib/topology.sh"
+source "$ROOT/lib/skills.sh"
 source "$ROOT/lib/routing.sh"
 source "$ROOT/lib/dispatch.sh"
 require_jq

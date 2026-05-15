@@ -37,6 +37,52 @@ After install, `/atelier` becomes available as a slash command.
 
 Custom topologies: drop a `<name>.json` into `<workspace>/.atelier/topologies/`. Project overrides shadow plugin defaults by name.
 
+### Custom Skills
+
+Custom skills live under `$HOME/.atelier/skills/<name>/SKILL.md`. They are loaded
+in preference to plugin-bundled skills with the same name, and can be referenced
+from any custom topology under `<workspace>/.atelier/topologies/`.
+
+Layout:
+
+    ~/.atelier/skills/
+    ├── collect-invoices/SKILL.md
+    ├── bookkeep-csv/SKILL.md
+    └── ...
+
+A `SKILL.md` is a regular Atelier skill: YAML frontmatter (`name`, `description`)
+plus a Markdown body with the instructions the agent must follow when that
+stage runs.
+
+To create a custom pipeline interactively, run `/atelier pipeline create` —
+it walks you through the design and emits a self-installing bash script.
+
+#### Example: French bookkeeping pipeline
+
+A worked example lives at `tests/fixtures/accounting-pipeline/`. It composes
+five custom skills into an `accounting` topology:
+
+1. `collect-invoices` (interactive) — user points the agent at invoice files
+2. `bookkeep-csv` (autonomous) — produces a CSV with French compte codes
+   (compte 6xx for expenses, 7xx for revenue, etc.)
+3. `review-bookkeeping` (autonomous) — sanity-checks the CSV
+4. `fix-bookkeeping` (autonomous, synthesized via `reviewBehavior`) — repairs
+   issues the review flagged
+5. `insert-bookkeeping` (autonomous) — appends the validated CSV to the
+   long-running ledger
+
+Install the example into your own home directory:
+
+    cp -R tests/fixtures/accounting-pipeline/skills/* ~/.atelier/skills/
+    mkdir -p .atelier/topologies
+    cp tests/fixtures/accounting-pipeline/accounting.json .atelier/topologies/
+
+⚠️ `cp -R` will overwrite any existing skills in `~/.atelier/skills/` with the
+same name. Back up first if you have your own versions.
+
+Then start a pipeline with `/atelier "process March invoices"` and select
+`accounting` as the topology when prompted.
+
 ## Architecture
 
 ```
