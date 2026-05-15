@@ -61,6 +61,22 @@ routing_decide() {
       # row) self-recover instead of wedging the pipeline.
       if [ "$last_status" = "running" ] || [ "$last_status" = "stuck" ]; then
         _routing_emit pause "null" "" "" "stuck" "subagent terminated without signaling at $current (last stage status: $last_status)"
+      elif [ "$cur_is_fix" = "true" ]; then
+        # Fix stages aren't in the topology, so $stage is empty here. Synthesize
+        # the same shape has_issues uses below — reading the fix skill from the
+        # parent review's reviewBehavior. Without this, the empty $stage flowed
+        # into _routing_emit and produced a stage row literally named "null".
+        local parent_review_name="${current/fix_/review_}"
+        local parent_stage; parent_stage="$(topology_stage "$topo" "$parent_review_name" 2>/dev/null || true)"
+        local fix_skill=""
+        if [ -n "$parent_stage" ]; then
+          fix_skill="$(printf '%s' "$parent_stage" | jq -r '.reviewBehavior // empty')"
+        fi
+        local fix_stage; fix_stage="$(jq -nc \
+          --arg n "$current" \
+          --arg s "$fix_skill" \
+          '{name:$n, mode:"autonomous", skill:$s, supportsPartial:true, dynamicallyInserted:true}')"
+        _routing_emit dispatch "$fix_stage" "true" "$parent_review_id" "running" ""
       else
         _routing_emit dispatch "$stage" "" "" "running" ""
       fi

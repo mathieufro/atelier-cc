@@ -146,6 +146,23 @@ TOPOLOGY='{
   [ "$(echo "$result" | jq -r .stage.name)" = "implement" ]
 }
 
+@test "verdict=null on a dynamically-inserted fix stage with status=idle: re-dispatch synthesized fix stage (regression: produced a stage row literally named \"null\")" {
+  # When a fix_* subagent crashes and resume demotes status stuck->idle, the
+  # Stop hook re-enters with currentStage=fix_X. fix_* isn't in the topology,
+  # so $stage is empty — previously this flowed into _routing_emit and we
+  # appended a stage row whose .stage was the string "null". Now routing must
+  # synthesize the fix-stage JSON the same way the has_issues branch does.
+  state='{"currentStage":"fix_spec","lastVerdict":null,"fixAttempts":{"review_spec":1},"stages":[{"id":"rs1","stage":"review_spec","status":"completed","verdict":"has_issues"},{"id":"fs1","stage":"fix_spec","status":"idle","dynamicallyInserted":true,"parentReviewStageId":"rs1","error":"subagent terminated without signaling"}]}'
+  result="$(routing_decide "$state" "$TOPOLOGY")"
+  [ "$(echo "$result" | jq -r .kind)" = "dispatch" ]
+  [ "$(echo "$result" | jq -r .stage.name)" = "fix_spec" ]
+  [ "$(echo "$result" | jq -r .stage.mode)" = "autonomous" ]
+  [ "$(echo "$result" | jq -r .stage.skill)" != "" ]
+  [ "$(echo "$result" | jq -r .stage.skill)" != "null" ]
+  [ "$(echo "$result" | jq -r .isFixStage)" = "true" ]
+  [ "$(echo "$result" | jq -r .parentReviewStageId)" = "rs1" ]
+}
+
 @test "verdict=null with stage status=stuck: pause (don't auto-retry crashed subagent)" {
   # Stuck on the last stage row means subagent-stop.sh already recorded a crash.
   # Auto-redispatching here would loop forever on a deterministically-crashing

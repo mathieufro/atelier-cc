@@ -48,6 +48,18 @@ dispatch_apply() {
       return 0
       ;;
     dispatch)
+      # Defensive guard: decision.stage must be a JSON object with a non-empty
+      # string name. A null/empty stage means routing returned a malformed
+      # dispatch — refuse rather than appending a stage row literally named
+      # "null". (Historic regression: routing's verdict=null self-recovery
+      # branch passed an empty $stage for dynamically-inserted fix stages.)
+      local _next_name
+      _next_name="$(printf '%s' "$decision" | jq -r '.stage.name // ""')"
+      if [ -z "$_next_name" ] || [ "$_next_name" = "null" ]; then
+        ps_set_status "$wsp" "$pid" "stuck" \
+          "routing produced a dispatch decision with no stage name (decision=$decision)"
+        return 0
+      fi
       _dispatch_emit "$wsp" "$pid" "$state" "$topo" "$decision"
       return 0
       ;;
