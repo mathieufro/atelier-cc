@@ -4,6 +4,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "$ROOT/lib/common.sh"
 source "$ROOT/lib/pipeline-state.sh"
 source "$ROOT/lib/topology.sh"
+source "$ROOT/lib/routing.sh"
+source "$ROOT/lib/dispatch.sh"
 require_jq
 
 input="$(cat)"
@@ -67,4 +69,11 @@ fi
 ps_update "$wsp" "$pid" \
   '.stages |= (.[:-1] + [.[-1] + {sessionId: $sid}])' \
   --arg sid "$agent_id"
-exit 0
+
+# Dispatch the next stage directly from SubagentStop instead of waiting for the
+# main agent to take its own turn before Stop fires. Saves one full main-agent
+# turn per autonomous stage transition — on large-context models that
+# intermediate "Not applicable; the Stop hook handles it" turn can cost several
+# minutes. The `reason` here is delivered to the parent (main) agent per the
+# Claude Code SubagentStop hook contract, so it reacts as if Stop had fired.
+dispatch_apply "$wsp" "$pid"

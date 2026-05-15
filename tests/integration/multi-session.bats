@@ -14,10 +14,14 @@ teardown() { rm -rf "$TMP"; }
 drive_one_for_session() {
   local wsp="$1" pid="$2" sid="$3"
   local sp="$wsp/.atelier/pipelines/$pid/pipeline-state.json"
-  local d
-  d="$(printf '{"cwd":"%s","session_id":"%s"}' "$wsp" "$sid" \
-      | "$ATELIER_CC_ROOT/hooks/stop.sh" || true)"
-  [ -z "$d" ] && return 0
+  local last_status last_verdict
+  last_status="$(jq -r '.stages[-1].status // ""' "$sp")"
+  last_verdict="$(jq -r '.lastVerdict // empty' "$sp")"
+  if [ "$last_status" != "running" ] || [ -n "$last_verdict" ]; then
+    printf '{"cwd":"%s","session_id":"%s"}' "$wsp" "$sid" \
+      | "$ATELIER_CC_ROOT/hooks/stop.sh" >/dev/null || true
+    return 0
+  fi
   local stage assigned mode
   stage="$(jq -r .currentStage "$sp")"
   assigned="$(jq -r '.stages[-1].assignedOutputPath // empty' "$sp")"
@@ -26,7 +30,7 @@ drive_one_for_session() {
   ps_complete_stage "$wsp" "$pid" "done" "$assigned"
   if [ "$mode" = "autonomous" ]; then
     printf '{"agent_type":"atelier:atelier-stage-worker","agent_id":"sim","cwd":"%s","session_id":"%s"}' \
-      "$wsp" "$sid" | "$ATELIER_CC_ROOT/hooks/subagent-stop.sh"
+      "$wsp" "$sid" | "$ATELIER_CC_ROOT/hooks/subagent-stop.sh" >/dev/null || true
   fi
 }
 
