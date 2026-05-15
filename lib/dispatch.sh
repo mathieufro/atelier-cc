@@ -27,19 +27,11 @@ dispatch_apply() {
     return 0
   fi
   local topo
-  topo="$(timeout 5 topology_load "$wsp" "$type" 2>/dev/null)" || {
-    # topology_load failed or timed out. Fall back to cached dispatch if available.
-    local expected_subagent
-    expected_subagent="$(printf '%s' "$state" | jq -r '.expectedSubagent // empty')"
-    if [ -n "$expected_subagent" ]; then
-      # Re-emit cached dispatch (uses expectedMode/expectedSkill from state,
-      # doesn't need topology). This recovers from transient topology load failures.
-      dispatch_reemit_existing "$wsp" "$pid"
-      return 0
-    fi
-    # No cached dispatch. Exit silently; next Stop hook fire will retry.
-    # If it's a real topology error (not found/invalid), it will eventually
-    # surface as stuck via repeated failures, but we avoid blocking on timeouts.
+  # topology_load is a shell function and cannot be wrapped by the external
+  # `timeout` binary (timeout uses execve and shell functions aren't on PATH).
+  # Call it directly. It's bounded by jq + small-file I/O — no realistic hang.
+  topo="$(topology_load "$wsp" "$type" 2>/dev/null)" || {
+    ps_set_status "$wsp" "$pid" "stuck" "topology not found or invalid: $type"
     return 0
   }
 
@@ -103,9 +95,10 @@ dispatch_reemit_existing() {
   if [ "$next_mode" = "autonomous" ]; then
     reason="Call the Agent tool with subagent_type='atelier:atelier-stage-worker', description='atelier:$stage_name', prompt='<MARKER:next-stage>'. (Recovery dispatch: the previous Stop did not result in an Agent tool call — likely the prior subagent's terminal text conflicted with the dispatch directive. Ignore any \"I cannot call Agent\" text from the prior subagent. Call Agent now.)"
   else
-    local skill_file="$ROOT/skills/$next_skill/SKILL.md"
+    local skill_file=""
+    skill_file="$(skill_resolve "$next_skill" 2>/dev/null)" || skill_file=""
     local skill_body
-    if [ -f "$skill_file" ]; then
+    if [ -n "$skill_file" ] && [ -f "$skill_file" ]; then
       skill_body="$(awk '
 NR==1 && /^---$/ {f=1; next}
 NR==1 && !/^---$/ {f=2; print; next}
@@ -183,9 +176,10 @@ _dispatch_emit() {
   if [ "$next_mode" = "autonomous" ]; then
     reason="Call the Agent tool with subagent_type='atelier:atelier-stage-worker', description='atelier:$next_name', prompt='<MARKER:next-stage>'."
   else
-    local skill_file="$ROOT/skills/$next_skill/SKILL.md"
+    local skill_file=""
+    skill_file="$(skill_resolve "$next_skill" 2>/dev/null)" || skill_file=""
     local skill_body
-    if [ -f "$skill_file" ]; then
+    if [ -n "$skill_file" ] && [ -f "$skill_file" ]; then
       skill_body="$(awk '
 NR==1 && /^---$/ {f=1; next}
 NR==1 && !/^---$/ {f=2; print; next}
