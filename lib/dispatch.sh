@@ -27,8 +27,19 @@ dispatch_apply() {
     return 0
   fi
   local topo
-  topo="$(topology_load "$wsp" "$type" 2>/dev/null)" || {
-    ps_set_status "$wsp" "$pid" "stuck" "topology not found or invalid: $type"
+  topo="$(timeout 5 topology_load "$wsp" "$type" 2>/dev/null)" || {
+    # topology_load failed or timed out. Fall back to cached dispatch if available.
+    local expected_subagent
+    expected_subagent="$(printf '%s' "$state" | jq -r '.expectedSubagent // empty')"
+    if [ -n "$expected_subagent" ]; then
+      # Re-emit cached dispatch (uses expectedMode/expectedSkill from state,
+      # doesn't need topology). This recovers from transient topology load failures.
+      dispatch_reemit_existing "$wsp" "$pid"
+      return 0
+    fi
+    # No cached dispatch. Exit silently; next Stop hook fire will retry.
+    # If it's a real topology error (not found/invalid), it will eventually
+    # surface as stuck via repeated failures, but we avoid blocking on timeouts.
     return 0
   }
 
@@ -166,7 +177,7 @@ _dispatch_emit() {
       --arg k "$inc"
   fi
 
-  ps_update "$wsp" "$pid" ".lastVerdict = null | .expectedSubagent = \"atelier:atelier-stage-worker\""
+  ps_update "$wsp" "$pid" ".lastVerdict = null | .expectedSubagent = \"atelier:atelier-stage-worker\" | .expectedMode = \"$next_mode\" | .expectedSkill = \"$next_skill\""
 
   local reason
   if [ "$next_mode" = "autonomous" ]; then
