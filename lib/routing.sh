@@ -87,7 +87,11 @@ routing_decide() {
         if [ "${attempts:-0}" -ge "$ROUTING_PARTIAL_CAP" ]; then
           _routing_emit pause "null" "" "" "idle" "partial retry cap exceeded"
         else
-          _routing_emit dispatch "$stage" "" "$current" "running" ""
+          # $current is the increment key (slot 7), NOT parent_id (slot 4). The
+          # previous "$stage" "" "$current" "running" "" call put $current in the
+          # parent_id slot and left inc_attempts empty, so fixAttempts never
+          # incremented on partial — and the retry cap was unreachable.
+          _routing_emit dispatch "$stage" "" "" "running" "" "$current"
         fi
       else
         _routing_emit pause "null" "" "" "stuck" "partial verdict on non-partial stage: $current"

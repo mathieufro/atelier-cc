@@ -81,6 +81,17 @@ TOPOLOGY='{
   [ "$(echo "$result" | jq -r .stage.name)" = "implement" ]
 }
 
+@test "verdict=partial dispatch sets incrementFixAttempts (regression: cap unreachable)" {
+  # Positional arg bug previously put $current in the parent_id slot and left
+  # inc_attempts empty, so fixAttempts never incremented and the partial retry
+  # cap was unreachable — a deterministically-partial stage would loop forever.
+  state='{"currentStage":"implement","lastVerdict":"partial","fixAttempts":{"implement":2},"stages":[{"id":"i1","stage":"implement","status":"idle"}]}'
+  result="$(routing_decide "$state" "$TOPOLOGY")"
+  [ "$(echo "$result" | jq -r .incrementFixAttempts)" = "implement" ]
+  [ "$(echo "$result" | jq -r .parentReviewStageId)" = "null" ]
+  [ "$(echo "$result" | jq -r .isFixStage)" = "false" ]
+}
+
 @test "verdict=partial at retry cap (5) pauses" {
   state='{"currentStage":"implement","lastVerdict":"partial","fixAttempts":{"implement":5},"stages":[{"id":"i1","stage":"implement","status":"idle"}]}'
   result="$(routing_decide "$state" "$TOPOLOGY")"
