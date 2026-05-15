@@ -6,7 +6,7 @@ DST="$ROOT/skills"
 [ -d "$SRC" ] || { echo "atelier-cc: source skills not found: $SRC (expected sibling atelier/ submodule)" >&2; exit 1; }
 mkdir -p "$DST"
 # Skills from upstream atelier/ that don't apply to atelier-cc.
-EXCLUDE=("benchmarking" "ralph-loop-help" "responding")
+EXCLUDE=("benchmarking" "ralph-loop-help" "responding" "create-pipeline")
 is_excluded() {
   local name="$1"
   for e in "${EXCLUDE[@]}"; do
