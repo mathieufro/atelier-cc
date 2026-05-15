@@ -45,6 +45,24 @@ esac
 last_status="$(printf '%s' "$state" | jq -r '(.stages // []) | (last // {}) | .status // ""')"
 last_verdict="$(printf '%s' "$state" | jq -r '.lastVerdict // empty')"
 if [ "$last_status" = "running" ] && [ -z "$last_verdict" ]; then
+  # Stage is mid-flight (subagent running, or interactive stage going). Don't
+  # re-dispatch. EXCEPT: detect the "ghost stage" case where SubagentStop
+  # dispatched the next stage (appended a running row, emitted a block reason)
+  # but the main agent never called the Agent tool — typically because the
+  # just-completed subagent's terminal text ("I cannot call the Agent tool
+  # here — my stage_complete signal has already been emitted") conflicted
+  # with the dispatch directive and the main echoed the subagent's wording
+  # instead of acting. Without recovery the pipeline silently wedges here.
+  #
+  # A real running stage has either a compiledPromptPath (PreToolUse fired,
+  # which only happens when main actually called Agent) or a sessionId (the
+  # subagent has already stopped at least once). A ghost has neither.
+  last_compiled="$(printf '%s' "$state" | jq -r '(.stages // []) | (last // {}) | .compiledPromptPath // ""')"
+  last_session_id="$(printf '%s' "$state" | jq -r '(.stages // []) | (last // {}) | .sessionId // ""')"
+  if [ -z "$last_compiled" ] && [ -z "$last_session_id" ]; then
+    dispatch_reemit_existing "$wsp" "$pid"
+    exit 0
+  fi
   exit 0
 fi
 

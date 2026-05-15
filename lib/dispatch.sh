@@ -66,6 +66,53 @@ dispatch_apply() {
   esac
 }
 
+# dispatch_reemit_existing <wsp> <pid>
+#   Emit a fresh block-decision JSON for the CURRENT in-flight stage row
+#   without appending a new one. Used by Stop when it detects a "ghost stage" —
+#   a row that was dispatched (status=running) but never had a subagent
+#   actually launched against it (compiledPromptPath null, sessionId null).
+#   That happens when the main agent ignores the SubagentStop block reason
+#   (typically because the just-completed subagent's terminal text conflicted
+#   with the dispatch directive — e.g. "I cannot call the Agent tool here").
+#   Without recovery the pipeline silently wedges.
+dispatch_reemit_existing() {
+  local wsp="$1" pid="$2"
+  local sp; sp="$(ps_path "$wsp" "$pid")"
+  [ -f "$sp" ] || return 0
+  local state; state="$(cat "$sp")"
+
+  local stage_name next_mode next_skill assigned pad
+  stage_name="$(printf '%s' "$state" | jq -r '.currentStage // empty')"
+  next_mode="$(printf '%s' "$state" | jq -r '.expectedMode // "autonomous"')"
+  next_skill="$(printf '%s' "$state" | jq -r '.expectedSkill // empty')"
+  assigned="$(printf '%s' "$state" | jq -r '.stages[-1].assignedOutputPath // empty')"
+  [ -n "$stage_name" ] || return 0
+
+  local reason
+  if [ "$next_mode" = "autonomous" ]; then
+    reason="Call the Agent tool with subagent_type='atelier:atelier-stage-worker', description='atelier:$stage_name', prompt='<MARKER:next-stage>'. (Recovery dispatch: the previous Stop did not result in an Agent tool call — likely the prior subagent's terminal text conflicted with the dispatch directive. Ignore any \"I cannot call Agent\" text from the prior subagent. Call Agent now.)"
+  else
+    local skill_file="$ROOT/skills/$next_skill/SKILL.md"
+    local skill_body
+    if [ -f "$skill_file" ]; then
+      skill_body="$(awk '
+NR==1 && /^---$/ {f=1; next}
+NR==1 && !/^---$/ {f=2; print; next}
+f==1 && /^---$/ {f=2; next}
+f==2 {print}
+' "$skill_file")"
+    else
+      skill_body="(skill body unavailable)"
+    fi
+    local output_block=""
+    if [ -n "$assigned" ]; then
+      output_block=$'## Output Path (REQUIRED)\n\nWrite your output artifact to this exact path — do not invent a different filename:\n\n  '"$assigned"$'\n\nWhen you signal `stage_complete`, pass this same path as `outputPath`.\n\n---\n\n'
+    fi
+    reason=$'You are entering the **'"$stage_name"$'** stage.\n\n'"$output_block""$skill_body"$'\n\n---\n\nWhen this stage is done, call:\n\n```\nmcp__atelier__atelier_signal({type:"stage_complete", pipelineId:"'"$pid"$'", verdict:"...", outputPath:"..."})\n```\n\nThen stop your turn.'
+  fi
+  jq -nc --arg r "$reason" '{decision:"block", reason:$r}'
+}
+
 _dispatch_emit() {
   local wsp="$1" pid="$2" state="$3" topo="$4" decision="$5"
   local next_stage_json next_name next_mode next_skill is_fix parent_id inc

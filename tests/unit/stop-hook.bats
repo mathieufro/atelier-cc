@@ -53,14 +53,39 @@ drive_stop() {
   [ "$(echo "$result" | jq -r .decision)" = "block" ]
 }
 
-@test "stage-in-progress (running + no verdict): Stop hook exits silently" {
-  # When a stage was dispatched (stages[-1].status=running, lastVerdict=null)
-  # and the Stop hook re-fires (e.g., main turn produced text but hasn't called
-  # Agent yet), routing must NOT advance. We're mid-stage.
+@test "stage-in-progress with compiledPromptPath (subagent actually launched): Stop hook exits silently" {
+  # When PreToolUse fired (compiledPromptPath set), a subagent is running. Stop
+  # must NOT advance — we're mid-stage.
   ps_update "$TMP" "$PID" '.currentStage = "brainstorm" | .lastVerdict = null |
-    .stages = [{id:"b1",stage:"brainstorm",status:"running"}]'
+    .stages = [{id:"b1",stage:"brainstorm",status:"running",compiledPromptPath:"/tmp/x.md"}]'
   result="$(drive_stop "{\"cwd\":\"$TMP\",\"session_id\":\"sess-t\"}")"
   [ -z "$result" ]
+}
+
+@test "stage-in-progress with sessionId (subagent stopped at least once): Stop hook exits silently" {
+  ps_update "$TMP" "$PID" '.currentStage = "implement" | .lastVerdict = null | .expectedMode = "autonomous" |
+    .stages = [{id:"i1",stage:"implement",status:"running",sessionId:"sub-1"}]'
+  result="$(drive_stop "{\"cwd\":\"$TMP\",\"session_id\":\"sess-t\"}")"
+  [ -z "$result" ]
+}
+
+@test "ghost stage (running + no compiledPromptPath + no sessionId): Stop hook re-emits dispatch (regression: pipeline silently wedged when main agent ignored SubagentStop block reason)" {
+  # SubagentStop dispatched the next stage (appended running row, emitted block
+  # reason). Main agent saw the just-completed subagent's terminal text saying
+  # "I cannot call the Agent tool here — my stage_complete signal has already
+  # been emitted" and stopped without calling Agent. PreToolUse never fired, so
+  # compiledPromptPath stays null. Without recovery the pipeline silently
+  # wedges here. Stop must re-emit the dispatch directive for the existing row.
+  ps_update "$TMP" "$PID" '.currentStage = "implement" | .lastVerdict = null |
+    .expectedMode = "autonomous" | .expectedSubagent = "atelier:atelier-stage-worker" | .expectedSkill = "implementing-plans" |
+    .stages = [{id:"i1",stage:"implement",status:"running",sessionId:null,compiledPromptPath:null,assignedOutputPath:null}]'
+  result="$(drive_stop "{\"cwd\":\"$TMP\",\"session_id\":\"sess-t\"}")"
+  [ "$(echo "$result" | jq -r .decision)" = "block" ]
+  [[ "$(echo "$result" | jq -r .reason)" == *"atelier:atelier-stage-worker"* ]]
+  [[ "$(echo "$result" | jq -r .reason)" == *"<MARKER:next-stage>"* ]]
+  [[ "$(echo "$result" | jq -r .reason)" == *"atelier:implement"* ]]
+  # Must NOT have appended a new stage row.
+  [ "$(jq -r '.stages | length' ".atelier/pipelines/$PID/pipeline-state.json")" = "1" ]
 }
 
 @test "no owned pipeline: exits with no decision" {
