@@ -20,6 +20,15 @@ TOPOLOGY='{
   ]
 }'
 
+PLAN_TOPOLOGY='{
+  "name":"plan",
+  "stages":[
+    {"name":"quick_plan","mode":"interactive","skill":"quick-planning","requiresArtifact":true},
+    {"name":"review_quick_plan","mode":"autonomous","skill":"quick-plan-review","reviewBehavior":"fixing","requiresArtifact":true},
+    {"name":"plan_gate","mode":"interactive","skill":"plan-gate"}
+  ]
+}'
+
 @test "no currentStage: dispatch first stage" {
   state='{"currentStage":null,"lastVerdict":null,"fixAttempts":{}}'
   result="$(routing_decide "$state" "$TOPOLOGY")"
@@ -36,6 +45,22 @@ TOPOLOGY='{
 @test "verdict=done on last stage terminates with completed" {
   state='{"currentStage":"validate","lastVerdict":"done","fixAttempts":{},"stages":[{"id":"s1","stage":"validate","status":"completed"}]}'
   result="$(routing_decide "$state" "$TOPOLOGY")"
+  [ "$(echo "$result" | jq -r .kind)" = "terminate" ]
+  [ "$(echo "$result" | jq -r .newStatus)" = "completed" ]
+}
+
+@test "plan_gate action=implement dispatches dynamic implement even when verdict is done" {
+  state='{"currentStage":"plan_gate","lastVerdict":"done","lastAction":"implement","fixAttempts":{},"stages":[{"id":"pg1","stage":"plan_gate","status":"completed","verdict":"done"}]}'
+  result="$(routing_decide "$state" "$PLAN_TOPOLOGY")"
+  [ "$(echo "$result" | jq -r .kind)" = "dispatch" ]
+  [ "$(echo "$result" | jq -r .stage.name)" = "implement" ]
+  [ "$(echo "$result" | jq -r .stage.skill)" = "implementing-plans" ]
+  [ "$(echo "$result" | jq -r .stage.dynamicallyInserted)" = "true" ]
+}
+
+@test "plan_gate action=done terminates" {
+  state='{"currentStage":"plan_gate","lastVerdict":"done","lastAction":"done","fixAttempts":{},"stages":[{"id":"pg1","stage":"plan_gate","status":"completed","verdict":"done"}]}'
+  result="$(routing_decide "$state" "$PLAN_TOPOLOGY")"
   [ "$(echo "$result" | jq -r .kind)" = "terminate" ]
   [ "$(echo "$result" | jq -r .newStatus)" = "completed" ]
 }

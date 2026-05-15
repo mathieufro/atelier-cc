@@ -8,9 +8,10 @@ readonly ROUTING_PARTIAL_CAP=5
 routing_decide() {
   local state="$1" topo="$2"
 
-  local current verdict
+  local current verdict action
   current="$(printf '%s' "$state" | jq -r '.currentStage')"
   verdict="$(printf '%s' "$state" | jq -r '.lastVerdict')"
+  action="$(printf '%s' "$state" | jq -r '.lastAction // empty')"
 
   if [ "$current" = "null" ] || [ -z "$current" ]; then
     local first; first="$(topology_first_stage "$topo")"
@@ -44,6 +45,21 @@ routing_decide() {
     review_behavior=""
     gate_behavior=""
     supports_partial="true"
+  fi
+
+  if [ "$current" = "plan_gate" ]; then
+    case "$action" in
+      implement)
+        local implement_stage
+        implement_stage="$(jq -nc '{name:"implement", mode:"autonomous", skill:"implementing-plans", supportsPartial:true, dynamicallyInserted:true}')"
+        _routing_emit dispatch "$implement_stage" "" "" "running" ""
+        return
+        ;;
+      done)
+        _routing_emit terminate "null" "" "" "completed" ""
+        return
+        ;;
+    esac
   fi
 
   case "$verdict" in

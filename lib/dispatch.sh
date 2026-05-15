@@ -119,12 +119,13 @@ f==2 {print}
 
 _dispatch_emit() {
   local wsp="$1" pid="$2" state="$3" topo="$4" decision="$5"
-  local next_stage_json next_name next_mode next_skill is_fix parent_id inc
+  local next_stage_json next_name next_mode next_skill is_fix is_dynamic parent_id inc
   next_stage_json="$(printf '%s' "$decision" | jq -c .stage)"
   next_name="$(printf '%s' "$next_stage_json" | jq -r .name)"
   next_mode="$(printf '%s' "$next_stage_json" | jq -r .mode)"
   next_skill="$(printf '%s' "$next_stage_json" | jq -r '.skill // empty')"
   is_fix="$(printf '%s' "$decision" | jq -r .isFixStage)"
+  is_dynamic="$(printf '%s' "$next_stage_json" | jq -r '.dynamicallyInserted // false')"
   parent_id="$(printf '%s' "$decision" | jq -r '.parentReviewStageId // empty')"
   inc="$(printf '%s' "$decision" | jq -r '.incrementFixAttempts // empty')"
 
@@ -159,9 +160,13 @@ _dispatch_emit() {
   fi
 
   ps_append_stage "$wsp" "$pid" "$next_name" "$next_mode" "$next_skill" "$assigned"
-  if [ "$is_fix" = "true" ] && [ -n "$parent_id" ]; then
+  if [ "$is_dynamic" = "true" ] || [ "$is_fix" = "true" ]; then
     ps_update "$wsp" "$pid" \
-      '.stages |= (.[:-1] + [.[-1] + {dynamicallyInserted: true, parentReviewStageId: $pid}])' \
+      '.stages |= (.[:-1] + [.[-1] + {dynamicallyInserted: true}])'
+  fi
+  if [ -n "$parent_id" ]; then
+    ps_update "$wsp" "$pid" \
+      '.stages |= (.[:-1] + [.[-1] + {parentReviewStageId: $pid}])' \
       --arg pid "$parent_id"
   fi
   if [ -n "$inc" ]; then
@@ -170,7 +175,7 @@ _dispatch_emit() {
       --arg k "$inc"
   fi
 
-  ps_update "$wsp" "$pid" ".lastVerdict = null | .expectedSubagent = \"atelier:atelier-stage-worker\" | .expectedMode = \"$next_mode\" | .expectedSkill = \"$next_skill\""
+  ps_update "$wsp" "$pid" ".lastVerdict = null | .lastAction = null | .expectedSubagent = \"atelier:atelier-stage-worker\" | .expectedMode = \"$next_mode\" | .expectedSkill = \"$next_skill\""
 
   local reason
   if [ "$next_mode" = "autonomous" ]; then

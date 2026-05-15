@@ -51,6 +51,13 @@ if [ "$agent_type" != "$expected_subagent" ]; then
 fi
 
 if [ -z "$verdict" ]; then
+  last_compiled="$(jq -r '.stages[-1].compiledPromptPath // empty' "$sp")"
+  last_session_id="$(jq -r '.stages[-1].sessionId // empty' "$sp")"
+  if [ -z "$last_compiled" ] && [ -z "$last_session_id" ]; then
+    dispatch_reemit_existing "$wsp" "$pid"
+    exit 0
+  fi
+
   ps_update "$wsp" "$pid" \
     '.status = "stuck" | .error = "subagent terminated without signaling" |
      (.stages |= (.[:-1] + [.[-1] + {status:"stuck",error:"subagent terminated without signaling"}]))'

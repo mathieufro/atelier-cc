@@ -36,11 +36,22 @@ drive() { printf '%s' "$1" | "$ATELIER_CC_ROOT/hooks/subagent-stop.sh"; }
 }
 
 @test "no verdict signaled: stage and pipeline stuck" {
-  ps_update "$TMP" "$PID" '.lastVerdict = null'
+  ps_update "$TMP" "$PID" '.lastVerdict = null | .stages[-1].compiledPromptPath = "/tmp/compiled.md"'
   drive "{\"agent_type\":\"atelier:atelier-stage-worker\",\"agent_id\":\"abc\",\"cwd\":\"$TMP\",\"session_id\":\"sess-t\"}"
   state="$(cat ".atelier/pipelines/$PID/pipeline-state.json")"
   [ "$(echo "$state" | jq -r .status)" = "stuck" ]
   [[ "$(echo "$state" | jq -r '.stages[-1].error')" == *"without signaling"* ]]
+}
+
+@test "no verdict on ghost-dispatched stage re-emits dispatch instead of marking stuck" {
+  ps_update "$TMP" "$PID" '.lastVerdict = null | .stages[-1].compiledPromptPath = null | .stages[-1].sessionId = null'
+  result="$(drive "{\"agent_type\":\"atelier:atelier-stage-worker\",\"agent_id\":\"abc\",\"cwd\":\"$TMP\",\"session_id\":\"sess-t\"}")"
+  state="$(cat ".atelier/pipelines/$PID/pipeline-state.json")"
+  [ "$(echo "$result" | jq -r .decision)" = "block" ]
+  [[ "$(echo "$result" | jq -r .reason)" == *"atelier:atelier-stage-worker"* ]]
+  [ "$(echo "$state" | jq -r .status)" = "running" ]
+  [ "$(echo "$state" | jq -r '.stages[-1].status')" = "running" ]
+  [ "$(echo "$state" | jq -r '.stages[-1].error // empty')" = "" ]
 }
 
 @test "verdict present, artifact present: sessionId recorded, status running" {

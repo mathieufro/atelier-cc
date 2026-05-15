@@ -37,10 +37,10 @@ teardown() { rm -rf "$TMP"; }
 @test "SubagentStop only mutates its session's owned pipeline" {
   ps_update "$TMP" "$PID_A" '.currentStage = "implement" | .expectedSubagent = "atelier:atelier-stage-worker" |
     .expectedMode = "autonomous" |
-    .stages = [{id:"i1",stage:"implement",status:"running",startedAt:0}]'
+    .stages = [{id:"i1",stage:"implement",status:"running",startedAt:0,compiledPromptPath:"/tmp/a.md"}]'
   ps_update "$TMP" "$PID_B" '.currentStage = "implement" | .expectedSubagent = "atelier:atelier-stage-worker" |
     .expectedMode = "autonomous" |
-    .stages = [{id:"i2",stage:"implement",status:"running",startedAt:0}]'
+    .stages = [{id:"i2",stage:"implement",status:"running",startedAt:0,compiledPromptPath:"/tmp/b.md"}]'
   printf '{"cwd":"%s","session_id":"sess-A","agent_type":"atelier:atelier-stage-worker","agent_id":"a"}' "$TMP" \
     | "$ATELIER_CC_ROOT/hooks/subagent-stop.sh"
   [ "$(jq -r .status ".atelier/pipelines/$PID_A/pipeline-state.json")" = "stuck" ]

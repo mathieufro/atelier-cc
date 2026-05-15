@@ -30,3 +30,27 @@ teardown() { rm -rf "$TMP"; }
   ls "$TMP/.atelier/pipelines/$PID"/*-plan.md
   ls "$TMP/.atelier/pipelines/$PID"/*-plan-review.md
 }
+
+@test "plan_gate execute dispatches implementation instead of completing" {
+  source "$ATELIER_CC_ROOT/lib/common.sh"
+  source "$ATELIER_CC_ROOT/lib/pipeline-state.sh"
+  PID="$($ATELIER_CC_ROOT/scripts/start-pipeline.sh 'add a comment')"
+  ps_update "$TMP" "$PID" '.type = "plan" | .worktreeChoice = "in-tree"'
+
+  for i in $(seq 1 10); do
+    [ "$(jq -r .currentStage ".atelier/pipelines/$PID/pipeline-state.json")" = "plan_gate" ] && break
+    drive_one_iteration "$TMP" "$PID"
+  done
+
+  [ "$(jq -r .currentStage ".atelier/pipelines/$PID/pipeline-state.json")" = "plan_gate" ]
+  ps_complete_stage "$TMP" "$PID" "done" "" "implement"
+  result="$(printf '{"cwd":"%s","session_id":"sess-t"}' "$TMP" | "$ATELIER_CC_ROOT/hooks/stop.sh")"
+  state="$(cat ".atelier/pipelines/$PID/pipeline-state.json")"
+
+  [ "$(echo "$result" | jq -r .decision)" = "block" ]
+  [ "$(echo "$state" | jq -r .status)" = "running" ]
+  [ "$(echo "$state" | jq -r .currentStage)" = "implement" ]
+  [ "$(echo "$state" | jq -r '.stages[-1].dynamicallyInserted')" = "true" ]
+  [ "$(echo "$state" | jq -r .expectedMode)" = "autonomous" ]
+  [ "$(echo "$state" | jq -r '.lastAction // empty')" = "" ]
+}
