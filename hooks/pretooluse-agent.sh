@@ -31,6 +31,34 @@ sp="$(ps_path "$wsp" "$pid")"
 [ -f "$sp" ] || exit 0
 mode="$(jq -r '.expectedMode // empty' "$sp")"
 stage="$(jq -r '.currentStage // empty' "$sp")"
+status="$(jq -r '.status // empty' "$sp")"
+owner_sid="$(jq -r '.sourceSessionId // empty' "$sp")"
+
+# Ownership-fallback safety gate. If this pipeline was resolved by the
+# single-running-in-workspace fallback (sourceSessionId != this session — see
+# find_owned_pipeline), only intercept GENUINE atelier dispatch calls. A
+# non-owning session in this workspace must be able to spawn its own helper
+# subagents without this hook hijacking them into a stage worker / denying
+# them. For the stamped owner, the existing contract holds unchanged (during
+# an autonomous stage the main agent's Agent call IS the dispatch). The
+# per-stage dispatch budget below is the hard backstop for any mis-resolution.
+if [ "$owner_sid" != "$session_id" ]; then
+  _sub="$(printf '%s' "$input" | jq -r '.tool_input.subagent_type // ""')"
+  _desc="$(printf '%s' "$input" | jq -r '.tool_input.description // ""')"
+  _pr="$(printf '%s' "$input" | jq -r '.tool_input.prompt // ""')"
+  _is_dispatch=0
+  [ "$_sub" = "atelier:atelier-stage-worker" ] && _is_dispatch=1
+  [[ "$_desc" == atelier:* ]] && _is_dispatch=1
+  case "$_pr" in *'<MARKER:next-stage>'*) _is_dispatch=1 ;; esac
+  [ "$_is_dispatch" = "1" ] || exit 0
+fi
+
+# (No standalone terminal-status guard: find_owned_pipeline only ever resolves
+# a RUNNING pipeline, so a parked one already yields empty pid → this hook
+# exits above. That is loop-safe because Stop/SubagentStop early-exit on a
+# non-running pipeline, so nothing re-feeds a dispatch directive. The
+# meaningful terminal signal is the dispatch budget below, which flips the
+# pipeline to `stuck` and denies in the same invocation.)
 
 if [ "$mode" != "autonomous" ]; then
   # Interactive stage (or pre-classify). The MAIN agent owns the user
@@ -55,6 +83,36 @@ if [ "$mode" != "autonomous" ]; then
 fi
 
 model="$(jq -r '.expectedModel // empty' "$sp")"
+
+# ── Deterministic per-stage-row dispatch budget ──────────────────────────────
+# This hook is the SINGLE chokepoint every stage-worker launch passes through.
+# Count launches on the current running stage row. If that row is launched more
+# than the cap WITHOUT ever recording a sessionId or verdict (the worker never
+# actually ran or never signalled — the unbounded-loop class: no-ownership-now-
+# resolved, contaminated terminal text, never-signalled, partial-no-resignal),
+# the dispatch is structurally looping. Mark the pipeline `stuck` and deny.
+# Stop/SubagentStop then early-exit on `stuck` (no re-emit) so it CANNOT loop
+# past the cap — a hard, deterministic bound. `/atelier resume` demotes the row
+# and routing appends a fresh row (launchCount unset → 0), resetting the budget.
+LAUNCH_CAP="${ATELIER_DISPATCH_CAP:-3}"
+lc="$(jq -r --arg st "$stage" '
+  (.stages // []) | (last // {})
+  | if (.stage == $st and .status == "running") then (.launchCount // 0) else -1 end' "$sp")"
+if [ -n "$lc" ] && [ "$lc" -ge 0 ] 2>/dev/null; then
+  newlc=$((lc + 1))
+  had_run="$(jq -r '(.stages // []) | (last // {}) | (if ((.sessionId != null) or (.verdict != null)) then "yes" else "no" end)' "$sp")"
+  if [ "$newlc" -gt "$LAUNCH_CAP" ] && [ "$had_run" = "no" ]; then
+    diag="dispatch budget exhausted: stage \"$stage\" was launched $newlc times without the worker ever running or signalling — paused to prevent an infinite re-dispatch loop"
+    ps_update "$wsp" "$pid" \
+      '.status = "stuck" | .error = $e |
+       (.stages |= (.[:-1] + [.[-1] + {status:"stuck", error:$e, launchCount:$n}]))' \
+      --arg e "$diag" --argjson n "$newlc"
+    jq -nc --arg s "$stage" --argjson n "$newlc" '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:("Atelier is now `stuck`: stage \($s) was dispatched \($n) times and the worker never ran or signalled (a structural loop). The pipeline will NOT re-dispatch. Do NOT retry this Agent call. Investigate why the \($s) worker never signalled `atelier_signal` (it may have emitted orchestration text instead of doing the task, or could not start), then run `/atelier resume <task>` to reset the budget and retry.")}}'
+    exit 0
+  fi
+  ps_update "$wsp" "$pid" \
+    '.stages |= (.[:-1] + [.[-1] + {launchCount:$n}])' --argjson n "$newlc"
+fi
 
 compiled="$("$ROOT/scripts/compile-prompt.sh" "$pid" "$stage")"
 

@@ -37,8 +37,18 @@ drive() {
   [ -z "$out" ]
 }
 
-@test "Agent with the next-stage sentinel but no owned pipeline: silent pass-through, NEVER deny (marker-deny reverted — deny looped unbreakably)" {
-  out="$(drive "{\"tool_name\":\"Agent\",\"cwd\":\"$TMP\",\"session_id\":\"sess-Other\",\"tool_input\":{\"subagent_type\":\"atelier:atelier-stage-worker\",\"description\":\"atelier:review_code\",\"prompt\":\"<MARKER:next-stage>\"}}")"
+@test "non-owner session, single running pipeline, genuine dispatch: ownership fallback RESOLVES and rewrites (no sentinel passthrough, no deny-loop)" {
+  # sess-Other doesn't own it, but exactly one pipeline is running in TMP →
+  # deterministic fallback adopts it; a real atelier dispatch must be compiled,
+  # never silently pass the literal sentinel to a subagent.
+  out="$(drive "{\"tool_name\":\"Agent\",\"cwd\":\"$TMP\",\"session_id\":\"sess-Other\",\"tool_input\":{\"subagent_type\":\"atelier:atelier-stage-worker\",\"description\":\"atelier:write_plan\",\"prompt\":\"<MARKER:next-stage>\"}}")"
+  [ "$(echo "$out" | jq -r .hookSpecificOutput.permissionDecision)" = "allow" ]
+  [ "$(echo "$out" | jq -r .hookSpecificOutput.updatedInput.subagent_type)" = "atelier:atelier-stage-worker" ]
+  [[ "$(echo "$out" | jq -r .hookSpecificOutput.updatedInput.prompt)" != *"<MARKER:next-stage>"* ]]
+}
+
+@test "non-owner session helper subagent (not a dispatch) is NEVER hijacked, even with a running pipeline" {
+  out="$(drive "{\"tool_name\":\"Agent\",\"cwd\":\"$TMP\",\"session_id\":\"sess-Other\",\"tool_input\":{\"subagent_type\":\"general-purpose\",\"description\":\"research X\",\"prompt\":\"survey libs\"}}")"
   [ -z "$out" ]
 }
 
@@ -103,4 +113,46 @@ drive() {
   ps_update "$TMP" "$PID" '.expectedModel = "claude-sonnet-4-6"'
   out="$(drive "{\"tool_name\":\"Agent\",\"cwd\":\"$TMP\",\"session_id\":\"sess-t\",\"tool_input\":{}}")"
   [ "$(echo "$out" | jq -r .hookSpecificOutput.updatedInput.model)" = "claude-sonnet-4-6" ]
+}
+
+@test "terminal pipeline (stuck): not resolvable → hook no-ops (loop-safe: Stop/SubagentStop inert on stuck)" {
+  ps_update "$TMP" "$PID" '.status = "stuck" | .error = "x"'
+  out="$(drive "{\"tool_name\":\"Agent\",\"cwd\":\"$TMP\",\"session_id\":\"sess-t\",\"tool_input\":{}}")"
+  [ -z "$out" ]
+}
+
+@test "dispatch budget: under cap increments launchCount and rewrites normally" {
+  ps_update "$TMP" "$PID" '.stages = [{"id":"w1","stage":"write_plan","status":"running"}]'
+  out="$(drive "{\"tool_name\":\"Agent\",\"cwd\":\"$TMP\",\"session_id\":\"sess-t\",\"tool_input\":{}}")"
+  [ "$(echo "$out" | jq -r .hookSpecificOutput.permissionDecision)" = "allow" ]
+  [ "$(jq -r '.stages[-1].launchCount' ".atelier/pipelines/$PID/pipeline-state.json")" = "1" ]
+  [ "$(jq -r .status ".atelier/pipelines/$PID/pipeline-state.json")" = "running" ]
+}
+
+@test "dispatch budget: exceeding cap with no sessionId/verdict → pipeline stuck + deny (deterministic loop bound)" {
+  ps_update "$TMP" "$PID" '.stages = [{"id":"w1","stage":"write_plan","status":"running","launchCount":3}]'
+  out="$(drive "{\"tool_name\":\"Agent\",\"cwd\":\"$TMP\",\"session_id\":\"sess-t\",\"tool_input\":{}}")"
+  [ "$(echo "$out" | jq -r .hookSpecificOutput.permissionDecision)" = "deny" ]
+  reason="$(echo "$out" | jq -r .hookSpecificOutput.permissionDecisionReason)"
+  [[ "$reason" == *"stuck"* ]]
+  [[ "$reason" == *"never ran or signalled"* ]]
+  state="$(cat ".atelier/pipelines/$PID/pipeline-state.json")"
+  [ "$(echo "$state" | jq -r .status)" = "stuck" ]
+  [ "$(echo "$state" | jq -r '.stages[-1].status')" = "stuck" ]
+  [[ "$(echo "$state" | jq -r .error)" == *"dispatch budget exhausted"* ]]
+}
+
+@test "dispatch budget: a stage row that already recorded a sessionId never trips (healthy re-runs allowed)" {
+  ps_update "$TMP" "$PID" '.stages = [{"id":"w1","stage":"write_plan","status":"running","launchCount":9,"sessionId":"sub-1"}]'
+  out="$(drive "{\"tool_name\":\"Agent\",\"cwd\":\"$TMP\",\"session_id\":\"sess-t\",\"tool_input\":{}}")"
+  [ "$(echo "$out" | jq -r .hookSpecificOutput.permissionDecision)" = "allow" ]
+  [ "$(jq -r .status ".atelier/pipelines/$PID/pipeline-state.json")" = "running" ]
+}
+
+@test "dispatch budget: skipped when last row is not the running current stage (no false stuck)" {
+  ps_update "$TMP" "$PID" '.currentStage = "write_plan" |
+    .stages = [{"id":"r1","stage":"review_plan","status":"completed","launchCount":99}]'
+  out="$(drive "{\"tool_name\":\"Agent\",\"cwd\":\"$TMP\",\"session_id\":\"sess-t\",\"tool_input\":{}}")"
+  [ "$(echo "$out" | jq -r .hookSpecificOutput.permissionDecision)" = "allow" ]
+  [ "$(jq -r .status ".atelier/pipelines/$PID/pipeline-state.json")" = "running" ]
 }

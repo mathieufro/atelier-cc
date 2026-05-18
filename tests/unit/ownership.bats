@@ -37,6 +37,31 @@ teardown() { rm -rf "$TMP"; }
   [ -z "$(find_owned_pipeline "$TMP" sess-ghost)" ]
 }
 
+@test "find_owned_pipeline adopts the single running pipeline when sourceSessionId mismatches (deterministic fallback)" {
+  export CLAUDE_CODE_SESSION_ID="sess-A"
+  PID="$("$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'a')"
+  ps_update "$TMP" "$PID" '.status = "running"'
+  # A different session (from-specs / new window / cwd-diverged) must still
+  # resolve the one running pipeline in this workspace.
+  [ "$(find_owned_pipeline "$TMP" sess-DIFFERENT)" = "$PID" ]
+}
+
+@test "find_owned_pipeline fallback is ambiguous-safe: >1 running and no owner match → empty" {
+  export CLAUDE_CODE_SESSION_ID="sess-A"
+  PID_A="$("$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'a')"
+  PID_B="$(CLAUDE_CODE_SESSION_ID=sess-B "$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'b')"
+  ps_update "$TMP" "$PID_A" '.status = "running"'
+  ps_update "$TMP" "$PID_B" '.status = "running"'
+  [ -z "$(find_owned_pipeline "$TMP" sess-NEITHER)" ]
+}
+
+@test "find_owned_pipeline fallback ignores non-running pipelines" {
+  export CLAUDE_CODE_SESSION_ID="sess-A"
+  PID="$("$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'a')"
+  ps_set_status "$TMP" "$PID" "idle"
+  [ -z "$(find_owned_pipeline "$TMP" sess-DIFFERENT)" ]
+}
+
 @test "find_owned_pipeline ignores completed/idle/stuck pipelines" {
   export CLAUDE_CODE_SESSION_ID="sess-A"
   PID="$("$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'a')"

@@ -112,13 +112,25 @@ drive_post() { printf '%s' "$1" | "$ATELIER_CC_ROOT/hooks/posttooluse-signal.sh"
   [ "$(jq -r .currentStage ".atelier/pipelines/$PID/pipeline-state.json")" = "brainstorm" ]
 }
 
-@test "foreign session (subagent / unrelated): no owned pipeline -> silent no-op" {
-  ps_update "$TMP" "$PID" '.currentStage = "brainstorm" | .expectedMode = "interactive" | .lastVerdict = "done"'
+@test "no resolvable running pipeline (not running, no fallback): silent no-op" {
+  # Ownership now falls back to "the single running pipeline in the workspace",
+  # so the no-op case is "nothing running to adopt" (idle/terminal), not merely
+  # a sourceSessionId mismatch. The subagent (agent_id) no-op is covered above.
+  ps_update "$TMP" "$PID" '.status = "idle" | .currentStage = "brainstorm" | .expectedMode = "interactive" | .lastVerdict = "done"'
   foreign="$(jq -nc --arg cwd "$TMP" \
     '{cwd:$cwd, session_id:"sess-Other", tool_name:"mcp__atelier__atelier_signal",
       tool_response:{content:[{type:"text",text:"Stage signal received."}]}}')"
   result="$(drive_post "$foreign")"
   [ -z "$result" ]
+}
+
+@test "non-owner main-agent signal, single running pipeline: fallback adopts and advances (deterministic ownership)" {
+  ps_update "$TMP" "$PID" '.status = "running" | .currentStage = "brainstorm" | .expectedMode = "interactive" | .lastVerdict = "done" | .stages = [{id:"b1",stage:"brainstorm",status:"completed",verdict:"done"}]'
+  foreign="$(jq -nc --arg cwd "$TMP" \
+    '{cwd:$cwd, session_id:"sess-Other", tool_name:"mcp__atelier__atelier_signal",
+      tool_response:{content:[{type:"text",text:"Stage signal received."}]}}')"
+  result="$(drive_post "$foreign")"
+  [ "$(echo "$result" | jq -r .decision)" = "block" ]
 }
 
 @test "terminal pipeline status (completed): no-op" {

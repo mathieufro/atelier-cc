@@ -88,10 +88,18 @@ drive_stop() {
   [ "$(jq -r '.stages | length' ".atelier/pipelines/$PID/pipeline-state.json")" = "1" ]
 }
 
-@test "no owned pipeline: exits with no decision" {
-  # Foreign session_id resolves to no owned pipeline → silent no-op.
+@test "no resolvable running pipeline: exits with no decision" {
+  # Ownership now falls back to the single running pipeline in the workspace,
+  # so the no-op case is "nothing running to adopt" (the strict-ownership
+  # mismatch alone no longer no-ops — it deterministically adopts).
+  ps_update "$TMP" "$PID" '.status = "idle"'
   result="$(drive_stop "{\"cwd\":\"$TMP\",\"session_id\":\"sess-Other\"}")"
   [ -z "$result" ]
+}
+
+@test "foreign session, single running pipeline: fallback adopts and routes (deterministic ownership)" {
+  result="$(drive_stop "{\"cwd\":\"$TMP\",\"session_id\":\"sess-Other\"}")"
+  [ "$(echo "$result" | jq -r .decision)" = "block" ]
 }
 
 @test "awaiting classify (type=null): exits with no decision, does not dispatch" {

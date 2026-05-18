@@ -137,7 +137,24 @@ find_owned_pipeline() {
     fi
   done
   local n="${#matches[@]}"
-  [ "$n" -eq 0 ] && return 0
+  if [ "$n" -eq 0 ]; then
+    # Ownership fallback. sourceSessionId wasn't stamped for this session —
+    # pipeline started "from specs"/attach, continued in a new CC window, cwd
+    # diverged, or a Google-Drive path. The documented contract is one pipeline
+    # per workspace/session, so if EXACTLY ONE pipeline in this workspace is
+    # `running`, it is unambiguously the one this session is driving — adopt it.
+    # (Zero or >1 running → ambiguous → return empty, unchanged behavior.) This
+    # makes resolution deterministic instead of dependent on a brittle
+    # sourceSessionId equality that silently fails into a re-dispatch loop.
+    local running=()
+    for sp in "$pdir"/*/pipeline-state.json; do
+      [ -f "$sp" ] || continue
+      [ "$(jq -r '.status // empty' "$sp" 2>/dev/null)" = "running" ] || continue
+      running+=("$(jq -r .id "$sp" 2>/dev/null)")
+    done
+    [ "${#running[@]}" -eq 1 ] && printf '%s\n' "${running[0]}"
+    return 0
+  fi
   if [ "$n" -gt 1 ]; then
     log warn "find_owned_pipeline: session $session_id owns $n running pipelines (expected 1); picking most recent"
     local best_idx=0 i
