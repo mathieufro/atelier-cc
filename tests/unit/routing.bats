@@ -84,18 +84,22 @@ PLAN_TOPOLOGY='{
   [ "$(echo "$result" | jq -r .stage.name)" = "write_plan" ]
 }
 
-@test "verdict=has_issues on a FIX stage re-dispatches the parent review (never terminate-completed)" {
+@test "verdict=has_issues on a FIX stage pauses idle for the human (never terminate, never loop the expensive review)" {
   # Regression (mit-relicensing): a fix stage signaling has_issues used to fall
   # through to topology_next_after — empty for synthesized fix_* → terminate
-  # "completed", silently shipping with the review's issues unresolved.
+  # "completed", silently shipping with the review's issues unresolved. The
+  # correct behavior is to ESCALATE: the fixer says it could not resolve the
+  # issues (or, with a stale MCP, the fix row is a never-launched phantom).
+  # Re-running the multi-pass parent review up to the cap just wastes cycles.
   state='{"currentStage":"fix_spec","lastVerdict":"has_issues","fixAttempts":{"review_spec":1},"stages":[{"id":"rs1","stage":"review_spec","status":"completed"},{"id":"fs1","stage":"fix_spec","status":"completed","dynamicallyInserted":true,"parentReviewStageId":"rs1"}]}'
   result="$(routing_decide "$state" "$TOPOLOGY")"
-  [ "$(echo "$result" | jq -r .kind)" = "dispatch" ]
-  [ "$(echo "$result" | jq -r .stage.name)" = "review_spec" ]
+  [ "$(echo "$result" | jq -r .kind)" = "pause" ]
+  [ "$(echo "$result" | jq -r .newStatus)" = "idle" ]
   [ "$(echo "$result" | jq -r .kind)" != "terminate" ]
+  [[ "$(echo "$result" | jq -r .error)" == *"has_issues"* ]]
 }
 
-@test "verdict=has_issues on a fix stage whose parent review is not in topology pauses idle (never terminate)" {
+@test "verdict=has_issues on a fix stage with no parent review also pauses idle (never terminate)" {
   state='{"currentStage":"fix_ghost","lastVerdict":"has_issues","fixAttempts":{},"stages":[{"id":"fg1","stage":"fix_ghost","status":"completed","dynamicallyInserted":true}]}'
   result="$(routing_decide "$state" "$TOPOLOGY")"
   [ "$(echo "$result" | jq -r .kind)" = "pause" ]

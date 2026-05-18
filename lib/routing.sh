@@ -131,26 +131,16 @@ routing_decide() {
       ;;
     has_issues)
       if [ "$cur_is_fix" = "true" ]; then
-        # A fix stage reporting STILL-unresolved issues must NEVER terminate
-        # the pipeline. The old code fell through to topology_next_after — and
-        # since synthesized fix_* stages aren't in the topology, next was empty
-        # → terminate "completed": a silent false success with the review's
-        # issues unresolved (the mit-relicensing bug). Re-dispatch the parent
-        # review so the bounded review↔fix loop continues; the parent review's
-        # own has_issues path enforces the fixAttempts cap and ultimately
-        # pauses idle for a human. Never auto-complete past a failed fix.
-        local pr_name=""
-        if [ -n "$parent_review_id" ]; then
-          pr_name="$(printf '%s' "$state" | jq -r --arg id "$parent_review_id" '
-            (.stages // []) | map(select(.id == $id)) | first // {} | .stage // empty')"
-        fi
-        [ -n "$pr_name" ] || pr_name="${current/fix_/review_}"
-        local pr_stage; pr_stage="$(topology_stage "$topo" "$pr_name" 2>/dev/null || true)"
-        if [ -n "$pr_stage" ]; then
-          _routing_emit dispatch "$pr_stage" "" "" "running" ""
-        else
-          _routing_emit pause "null" "" "" "idle" "fix stage $current reported unresolved issues; parent review $pr_name not in topology"
-        fi
+        # A fix stage reporting STILL-unresolved issues is the fixer ESCALATING:
+        # it changed things but problems remain (or — with a stale MCP — the
+        # fix row was a never-launched phantom stamped by a duplicate signal).
+        # Either way the correct move is to STOP and get the human, not to
+        # silently re-run the expensive multi-pass review↔fix loop up to the
+        # cap (wasteful) and never to terminate "completed" (the original
+        # mit-relicensing false-success bug). Pause idle with the diagnostic;
+        # SessionStart surfaces it and the user resumes / restart-stages after
+        # addressing the root cause.
+        _routing_emit pause "null" "" "" "idle" "fix stage $current did not resolve the review's issues (signaled has_issues) — escalating for human intervention. Inspect the fix/review artifacts, address the root cause, then \`/atelier resume <task>\` (or restart-stage to retry the fix)."
       elif [ -n "$review_behavior" ]; then
         local attempts; attempts="$(printf '%s' "$state" | jq -r --arg s "$current" '(.fixAttempts[$s] // 0) | tostring')"
         if [ "${attempts:-0}" -ge "$ROUTING_FIX_ATTEMPT_CAP" ]; then
