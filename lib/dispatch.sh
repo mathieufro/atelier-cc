@@ -173,7 +173,7 @@ dispatch_reemit_existing() {
 
   local reason
   if [ "$next_mode" = "autonomous" ]; then
-    reason="Call the Agent tool with subagent_type='atelier:atelier-stage-worker', description='atelier:$stage_name', prompt='<MARKER:next-stage>'. (Recovery dispatch: the previous Stop did not result in an Agent tool call — likely the prior subagent's terminal text conflicted with the dispatch directive. Ignore any \"I cannot call Agent\" text from the prior subagent. Call Agent now.)"
+    reason="Call the Agent tool with subagent_type='atelier:atelier-stage-worker', description='atelier:$stage_name', prompt='<MARKER:next-stage>'. The MOMENT that Agent tool call returns, END YOUR TURN immediately — do NOT read files, run commands, ask the user anything, or start the next stage yourself; the orchestrator routes the next stage from your turn-end. (Recovery dispatch: the previous Stop did not result in an Agent tool call — likely the prior subagent's terminal text conflicted with the dispatch directive. Ignore any \"I cannot call Agent\" text from the prior subagent. Call Agent now.)"
   else
     reason="$(_interactive_reason "$wsp" "$pid" "$stage_name" "$next_skill" "$assigned")"
   fi
@@ -250,7 +250,7 @@ _dispatch_emit() {
 
   local reason
   if [ "$next_mode" = "autonomous" ]; then
-    reason="Call the Agent tool with subagent_type='atelier:atelier-stage-worker', description='atelier:$next_name', prompt='<MARKER:next-stage>'."
+    reason="Call the Agent tool with subagent_type='atelier:atelier-stage-worker', description='atelier:$next_name', prompt='<MARKER:next-stage>'. The MOMENT that Agent tool call returns, END YOUR TURN immediately — do NOT read files, run commands, ask the user anything, or start the next stage yourself. The orchestrator routes the next stage from your turn-end (it will hand you the next directive — including, for an interactive stage, the instruction to run it yourself). Continuing to work here instead of ending your turn is the #1 cause of the pipeline wedging."
   else
     reason="$(_interactive_reason "$wsp" "$pid" "$next_name" "$next_skill" "$assigned")"
   fi
