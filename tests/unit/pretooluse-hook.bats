@@ -37,6 +37,27 @@ drive() {
   [ -z "$out" ]
 }
 
+@test "Agent with <MARKER:next-stage> but no owned pipeline: DENIED, not silently passed through (red-dot loop fix)" {
+  out="$(drive "{\"tool_name\":\"Agent\",\"cwd\":\"$TMP\",\"session_id\":\"sess-Other\",\"tool_input\":{\"subagent_type\":\"atelier:atelier-stage-worker\",\"description\":\"atelier:review_code\",\"prompt\":\"<MARKER:next-stage>\"}}")"
+  [ "$(echo "$out" | jq -r .hookSpecificOutput.permissionDecision)" = "deny" ]
+  reason="$(echo "$out" | jq -r .hookSpecificOutput.permissionDecisionReason)"
+  [[ "$reason" == *"does not own an active Atelier pipeline"* ]]
+  [[ "$reason" == *"/atelier resume"* ]]
+  [[ "$reason" == *"Do NOT retry"* ]]
+}
+
+@test "Agent with <MARKER:next-stage> and a valid owned autonomous pipeline: still rewrites (not denied)" {
+  out="$(drive "{\"tool_name\":\"Agent\",\"cwd\":\"$TMP\",\"session_id\":\"sess-t\",\"tool_input\":{\"subagent_type\":\"x\",\"prompt\":\"<MARKER:next-stage>\"}}")"
+  [ "$(echo "$out" | jq -r .hookSpecificOutput.permissionDecision)" = "allow" ]
+  [ "$(echo "$out" | jq -r .hookSpecificOutput.updatedInput.subagent_type)" = "atelier:atelier-stage-worker" ]
+  [[ "$(echo "$out" | jq -r .hookSpecificOutput.updatedInput.prompt)" != *"<MARKER:next-stage>"* ]]
+}
+
+@test "Agent WITHOUT the marker and no owned pipeline: still silently passes through (helper subagents unaffected)" {
+  out="$(drive "{\"tool_name\":\"Agent\",\"cwd\":\"$TMP\",\"session_id\":\"sess-Other\",\"tool_input\":{\"subagent_type\":\"general-purpose\",\"prompt\":\"go research X\"}}")"
+  [ -z "$out" ]
+}
+
 @test "Agent tool in interactive stage with no stage-worker delegation: passes through" {
   ps_update "$TMP" "$PID" '.expectedMode = "interactive"'
   out="$(drive "{\"tool_name\":\"Agent\",\"cwd\":\"$TMP\",\"session_id\":\"sess-t\"}")"
