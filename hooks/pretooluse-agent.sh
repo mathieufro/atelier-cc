@@ -9,33 +9,26 @@ input="$(cat)"
 tool="$(printf '%s' "$input" | jq -r '.tool_name // ""')"
 [ "$tool" = "Agent" ] || exit 0
 
-# `<MARKER:next-stage>` is an INTERNAL sentinel: the orchestrator's dispatch
-# directive tells the main agent to call Agent with prompt='<MARKER:next-stage>'
-# expecting THIS hook to replace it with the compiled stage prompt. If we ever
-# let the literal sentinel reach a subagent, that subagent has no real task —
-# it produces nothing, SubagentStop sees no verdict, the stage is re-dispatched,
-# and the pipeline spins forever ("red dot"). So whenever we would bail WITHOUT
-# rewriting, deny instead — never pass the placeholder through.
-marker=0
-case "$(printf '%s' "$input" | jq -r '.tool_input.prompt // ""')" in
-  *'<MARKER:next-stage>'*) marker=1 ;;
-esac
-_deny_unresolved() {
-  [ "$marker" = "1" ] || exit 0
-  jq -nc --arg r "$1" '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:$r}}'
-  exit 0
-}
-
+# Reverted (was: a marker-deny that returned permissionDecision:deny whenever
+# the session didn't own a pipeline and the Agent prompt contained the
+# next-stage sentinel). That was actively harmful: (1) it substring-matched the
+# sentinel in ANY Agent/Task prompt and blocked unrelated subagents in sessions
+# that don't own a pipeline; (2) per the Claude Code hook contract a PreToolUse
+# deny whose condition doesn't change re-fires on every re-dispatch, so when
+# ownership resolution itself failed the deny looped unbreakably (dispatch →
+# deny → stop → resume → deny …). Restoring the prior silent pass-through: if we
+# can't resolve+rewrite, do nothing (the underlying fix is ownership resolution,
+# not a deny that loops).
 session_id="$(printf '%s' "$input" | jq -r '.session_id // empty')"
-[ -n "$session_id" ] || _deny_unresolved "Atelier could not resolve a session id for this Agent dispatch, so the '<MARKER:next-stage>' placeholder cannot be compiled into a real stage prompt. Do NOT retry this Agent call. Run \`/atelier status\` then \`/atelier resume <task>\` to re-attach."
+[ -n "$session_id" ] || exit 0
 cwd="$(printf '%s' "$input" | jq -r '.cwd // empty')"
 [ -n "$cwd" ] && cd "$cwd"
 wsp="$(find_workspace_root)"
 pid="$(find_owned_pipeline "$wsp" "$session_id")"
-[ -n "$pid" ] || _deny_unresolved "This Claude Code session does not own an active Atelier pipeline in $wsp. The pipeline's sourceSessionId was stamped by a different session — common when it was started/seeded in another window or 'from specs', or when this window's working directory differs from the pipeline workspace. The orchestrator cannot compile the real stage prompt, so the '<MARKER:next-stage>' placeholder must NOT be sent to a subagent (doing so spins the pipeline forever). Do NOT retry this Agent call. Run \`/atelier resume <task description>\` from THIS session (it re-stamps sourceSessionId and re-dispatches), or restart Claude Code in the pipeline's workspace."
+[ -n "$pid" ] || exit 0
 
 sp="$(ps_path "$wsp" "$pid")"
-[ -f "$sp" ] || _deny_unresolved "Atelier resolved pipeline '$pid' but its state file is missing at $sp, so the stage prompt cannot be compiled. Do NOT retry this Agent call with the placeholder. Run \`/atelier status\` to inspect, or \`/atelier resume <task>\`."
+[ -f "$sp" ] || exit 0
 mode="$(jq -r '.expectedMode // empty' "$sp")"
 stage="$(jq -r '.currentStage // empty' "$sp")"
 
