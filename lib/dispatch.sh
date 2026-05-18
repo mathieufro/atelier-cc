@@ -9,6 +9,67 @@
 # next dispatch — that intermediate turn (the model emitting "Not applicable"
 # and stopping so Stop can fire) can take minutes on large-context models.
 
+# Maps a brainstorm-family interactive stage to the compile_* stage that
+# produces its prompt. Mirrors atelier's StageRunner.COMPILE_TARGETS (reversed):
+# the compile stage's output file IS the downstream brainstorm agent's system
+# prompt. Empty for any stage with no compile prelude.
+_compile_source_for_stage() {
+  case "$1" in
+    brainstorm)          printf 'compile_brainstorm' ;;
+    brainstorm_roadmap)  printf 'compile_roadmap_brainstorm' ;;
+    task_brainstorm)     printf 'compile_task_brainstorm' ;;
+    *)                   printf '' ;;
+  esac
+}
+
+# Resolves the prompt body for an interactive stage.
+#
+#   - Brainstorm-family stages: the body IS the preceding compile stage's
+#     output file content (mirrors atelier runBrainstormStage reading
+#     active.brainstormCompiledPromptPath). The compile stage did the
+#     codebase-orientation work; discarding it and using the raw skill —
+#     the prior bug — wasted the entire compile_* stage.
+#   - If no completed compile-source stage produced a non-empty artifact
+#     (e.g. a custom topology with a bare `brainstorm` and no compile
+#     prelude), fall back to the raw skill body. atelier hard-fails here,
+#     but atelier-cc supports arbitrary user topologies, so the raw skill
+#     is the only sensible behavior when there is no compile prelude.
+#   - All other interactive stages: the raw skill body, as before.
+#
+# Prints the body. Never fails — the fallback guarantees a usable prompt.
+_interactive_stage_body() {
+  local wsp="$1" pid="$2" stage_name="$3" skill_name="$4"
+  local src; src="$(_compile_source_for_stage "$stage_name")"
+  if [ -n "$src" ]; then
+    local sp; sp="$(ps_path "$wsp" "$pid")"
+    local out=""
+    if [ -f "$sp" ]; then
+      out="$(jq -r --arg s "$src" '
+        [ .stages[]
+          | select(.stage == $s
+                    and (.status // "") == "completed"
+                    and (.outputPath // "") != "") ]
+        | last // {} | .outputPath // empty' "$sp")"
+    fi
+    if [ -n "$out" ] && [ -s "$out" ]; then
+      cat "$out"
+      return 0
+    fi
+  fi
+  local skill_file=""
+  skill_file="$(skill_resolve "$skill_name" 2>/dev/null)" || skill_file=""
+  if [ -n "$skill_file" ] && [ -f "$skill_file" ]; then
+    awk '
+NR==1 && /^---$/ {f=1; next}
+NR==1 && !/^---$/ {f=2; print; next}
+f==1 && /^---$/ {f=2; next}
+f==2 {print}
+' "$skill_file"
+  else
+    printf '(skill body unavailable)'
+  fi
+}
+
 # dispatch_apply <wsp> <pid>
 #   Reads state, runs routing_decide, applies side effects (appends stage row,
 #   sets status, etc.), and prints the block-decision JSON for dispatches.
@@ -95,19 +156,8 @@ dispatch_reemit_existing() {
   if [ "$next_mode" = "autonomous" ]; then
     reason="Call the Agent tool with subagent_type='atelier:atelier-stage-worker', description='atelier:$stage_name', prompt='<MARKER:next-stage>'. (Recovery dispatch: the previous Stop did not result in an Agent tool call — likely the prior subagent's terminal text conflicted with the dispatch directive. Ignore any \"I cannot call Agent\" text from the prior subagent. Call Agent now.)"
   else
-    local skill_file=""
-    skill_file="$(skill_resolve "$next_skill" 2>/dev/null)" || skill_file=""
     local skill_body
-    if [ -n "$skill_file" ] && [ -f "$skill_file" ]; then
-      skill_body="$(awk '
-NR==1 && /^---$/ {f=1; next}
-NR==1 && !/^---$/ {f=2; print; next}
-f==1 && /^---$/ {f=2; next}
-f==2 {print}
-' "$skill_file")"
-    else
-      skill_body="(skill body unavailable)"
-    fi
+    skill_body="$(_interactive_stage_body "$wsp" "$pid" "$stage_name" "$next_skill")"
     local output_block=""
     if [ -n "$assigned" ]; then
       output_block=$'## Output Path (REQUIRED)\n\nWrite your output artifact to this exact path — do not invent a different filename:\n\n  '"$assigned"$'\n\nWhen you signal `stage_complete`, pass this same path as `outputPath`.\n\n---\n\n'
@@ -136,6 +186,14 @@ _dispatch_emit() {
   slug="$(extract_topic_slug "$pid")"
   artifact_type="$(printf '%s' "$next_stage_json" | jq -r '.artifactType // empty')"
   requires="$(printf '%s' "$next_stage_json" | jq -r '.requiresArtifact // false')"
+  # Compile stages always produce a consumed artifact (the compiled prompt for
+  # the downstream stage), so they need a real output path even though the
+  # topology doesn't mark them requiresArtifact. Without this they had no
+  # assignedOutputPath, compile-prompt.sh skipped the "Output Path (REQUIRED)"
+  # block, and the compile agent fell back to overwriting its own persisted
+  # input prompt in .compiled/ — clobbering it and producing no real artifact.
+  local is_compile="false"
+  case "$next_name" in compile_*) is_compile="true" ;; esac
 
   if [ "$is_fix" = "true" ] && [ -n "$parent_id" ]; then
     local parent_review_name target_stage_name
@@ -151,7 +209,7 @@ _dispatch_emit() {
       fi
     fi
   fi
-  if [ -z "$assigned" ] && [ "$requires" = "true" ]; then
+  if [ -z "$assigned" ] && { [ "$requires" = "true" ] || [ "$is_compile" = "true" ]; }; then
     if [ -n "$artifact_type" ]; then
       assigned="$wsp/.atelier/pipelines/$pid/${pad}-${slug}-${artifact_type}.md"
     else
@@ -181,19 +239,8 @@ _dispatch_emit() {
   if [ "$next_mode" = "autonomous" ]; then
     reason="Call the Agent tool with subagent_type='atelier:atelier-stage-worker', description='atelier:$next_name', prompt='<MARKER:next-stage>'."
   else
-    local skill_file=""
-    skill_file="$(skill_resolve "$next_skill" 2>/dev/null)" || skill_file=""
     local skill_body
-    if [ -n "$skill_file" ] && [ -f "$skill_file" ]; then
-      skill_body="$(awk '
-NR==1 && /^---$/ {f=1; next}
-NR==1 && !/^---$/ {f=2; print; next}
-f==1 && /^---$/ {f=2; next}
-f==2 {print}
-' "$skill_file")"
-    else
-      skill_body="(skill body unavailable)"
-    fi
+    skill_body="$(_interactive_stage_body "$wsp" "$pid" "$next_name" "$next_skill")"
     local output_block=""
     if [ -n "$assigned" ]; then
       output_block=$'## Output Path (REQUIRED)\n\nWrite your output artifact to this exact path — do not invent a different filename:\n\n  '"$assigned"$'\n\nWhen you signal `stage_complete`, pass this same path as `outputPath`.\n\n---\n\n'
