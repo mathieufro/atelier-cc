@@ -19,7 +19,17 @@ sp="$(ps_path "$wsp" "$pid")"
 # SessionStart's crash-recovery handles running rows on stale-heartbeat
 # pipelines, but drift can land us at (status=idle/stuck, last=running/stuck)
 # via abort races, manual edits, or pre-existing state files.
+# Clearing the trailing rows is NOT enough: routing_decide keys off the
+# top-level lastVerdict/lastAction, not the rows. A pipeline parked by an
+# escalation has lastVerdict="stuck" (or "partial"); leaving it set makes the
+# very next Stop hook re-enter routing's `stuck)` branch and immediately
+# re-park to idle — resume reports success but is structurally incapable of
+# recovering a stuck pipeline (only restart-stage worked, because it nulls
+# lastVerdict). Resume IS the explicit "retry / continue from progress.md"
+# signal, so clear every stale terminal signal here too; routing's null-verdict
+# branch then re-dispatches currentStage, and compile-prompt injects progress.md.
 ps_update "$wsp" "$pid" \
   '.status = "running" | .error = null | .sourceSessionId = $sid |
+   .lastVerdict = null | .lastAction = null | .lastOutcome = null |
    .stages |= map(if (.status == "running" or .status == "stuck") then . + {status:"idle", interrupted:true} else . end)' \
   --arg sid "$CLAUDE_CODE_SESSION_ID"

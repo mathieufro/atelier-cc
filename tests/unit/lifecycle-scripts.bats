@@ -53,6 +53,37 @@ teardown() { rm -rf "$TMP"; }
   [ "$(echo "$state" | jq -r '.stages[-1].interrupted')" = "true" ]
 }
 
+@test "resume.sh clears terminal lastVerdict/lastAction/lastOutcome (stuck pipeline actually recovers)" {
+  # An escalation parks the pipeline with lastVerdict="stuck". routing_decide
+  # keys off the top-level verdict, not the rows — if resume leaves it set, the
+  # next Stop hook re-enters the stuck) branch and re-parks. Resume must null
+  # every stale terminal signal so routing's null branch re-dispatches.
+  ps_update "$TMP" "$PID" \
+    '.currentStage = "implement" | .lastVerdict = "stuck" | .lastAction = "implement" |
+     .lastOutcome = "inconclusive" |
+     .stages = [{"id":"s1","stage":"implement","status":"completed","verdict":"stuck"}]'
+  CLAUDE_CODE_SESSION_ID="sess-resumer" "$ATELIER_CC_ROOT/scripts/resume.sh" "$PID"
+  state="$(cat ".atelier/pipelines/$PID/pipeline-state.json")"
+  [ "$(echo "$state" | jq -r .status)" = "running" ]
+  [ "$(echo "$state" | jq -r '.lastVerdict')" = "null" ]
+  [ "$(echo "$state" | jq -r '.lastAction')" = "null" ]
+  [ "$(echo "$state" | jq -r '.lastOutcome')" = "null" ]
+}
+
+@test "resume.sh + routing: stuck pipeline re-dispatches its stage instead of re-parking" {
+  source "$ATELIER_CC_ROOT/lib/topology.sh"
+  source "$ATELIER_CC_ROOT/lib/routing.sh"
+  TOPO='{"name":"task","stages":[{"name":"implement","mode":"autonomous","skill":"implementing-plans","supportsPartial":true}]}'
+  ps_update "$TMP" "$PID" \
+    '.type = "task" | .currentStage = "implement" | .lastVerdict = "stuck" |
+     .stages = [{"id":"s1","stage":"implement","status":"completed","verdict":"stuck"}]'
+  CLAUDE_CODE_SESSION_ID="sess-resumer" "$ATELIER_CC_ROOT/scripts/resume.sh" "$PID"
+  state="$(cat ".atelier/pipelines/$PID/pipeline-state.json")"
+  decision="$(routing_decide "$state" "$TOPO")"
+  [ "$(echo "$decision" | jq -r .kind)" = "dispatch" ]
+  [ "$(echo "$decision" | jq -r .stage.name)" = "implement" ]
+}
+
 @test "resume.sh leaves completed and idle stage rows untouched" {
   ps_update "$TMP" "$PID" \
     '.stages = [
