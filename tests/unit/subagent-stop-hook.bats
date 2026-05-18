@@ -77,3 +77,53 @@ drive() { printf '%s' "$1" | "$ATELIER_CC_ROOT/hooks/subagent-stop.sh"; }
   drive "{\"agent_type\":\"atelier:atelier-stage-worker\",\"agent_id\":\"abc\",\"cwd\":\"$TMP\",\"session_id\":\"sess-t\"}"
   [ "$(jq -r .status ".atelier/pipelines/$PID/pipeline-state.json")" = "running" ]
 }
+
+# ── Interactive stage run via a stage-worker subagent (brainstorm family). ───
+# The robustness fix: when the FINAL stage worker of an interactive stage
+# signals a verdict and ends, SubagentStop must advance the pipeline itself —
+# NOT wait for the main agent to voluntarily end its turn (the wedge class).
+
+@test "interactive stage, verdict set: SubagentStop advances WITHOUT waiting for main Stop" {
+  cat > .atelier/topologies/tb.json <<EOF2
+{"name":"tb","stages":[
+  {"name":"task_brainstorm","mode":"interactive","skill":"task-brainstorming","requiresArtifact":true},
+  {"name":"review_task","mode":"autonomous","skill":"reviewing-task-plans"}
+]}
+EOF2
+  spec="$TMP/.atelier/pipelines/$PID/02-spec.md"; echo "spec body" > "$spec"
+  ps_update "$TMP" "$PID" ".type = \"tb\" | .currentStage = \"task_brainstorm\" |
+    .expectedSubagent = \"atelier:atelier-stage-worker\" | .expectedMode = \"interactive\" |
+    .lastVerdict = \"done\" | .lastOutputPath = \"$spec\" |
+    .stages = [{id:\"tb1\",stage:\"task_brainstorm\",status:\"completed\",verdict:\"done\",assignedOutputPath:\"$spec\",outputPath:\"$spec\"}]"
+  result="$(drive "{\"agent_type\":\"atelier:atelier-stage-worker\",\"agent_id\":\"fin\",\"cwd\":\"$TMP\",\"session_id\":\"sess-t\"}")"
+  state="$(cat ".atelier/pipelines/$PID/pipeline-state.json")"
+  [ "$(echo "$result" | jq -r .decision)" = "block" ]
+  [[ "$(echo "$result" | jq -r .reason)" == *"atelier:atelier-stage-worker"* ]]
+  [ "$(echo "$state" | jq -r .currentStage)" = "review_task" ]
+  [ "$(echo "$state" | jq -r .status)" = "running" ]
+}
+
+@test "interactive stage, NO verdict: SubagentStop is a no-op (intermediate continuation, not stuck)" {
+  # Main re-spawns stage workers to relay AskUserQuestion answers; those end
+  # without signaling. Must NOT mark stuck or dispatch — the stage isn't done.
+  ps_update "$TMP" "$PID" '.currentStage = "task_brainstorm" |
+    .expectedSubagent = "atelier:atelier-stage-worker" | .expectedMode = "interactive" |
+    .lastVerdict = null |
+    .stages = [{id:"tb1",stage:"task_brainstorm",status:"running",compiledPromptPath:null,sessionId:null}]'
+  result="$(drive "{\"agent_type\":\"atelier:atelier-stage-worker\",\"agent_id\":\"c1\",\"cwd\":\"$TMP\",\"session_id\":\"sess-t\"}")"
+  state="$(cat ".atelier/pipelines/$PID/pipeline-state.json")"
+  [ -z "$result" ]
+  [ "$(echo "$state" | jq -r .status)" = "running" ]
+  [ "$(echo "$state" | jq -r '.stages[-1].status')" = "running" ]
+  [ "$(echo "$state" | jq -r '.stages[-1].error // empty')" = "" ]
+  [ "$(echo "$state" | jq -r '.stages | length')" = "1" ]
+}
+
+@test "interactive helper subagent of unexpected type, no verdict: no-op (not wrong-subagent stuck)" {
+  ps_update "$TMP" "$PID" '.currentStage = "task_brainstorm" |
+    .expectedSubagent = "atelier:atelier-stage-worker" | .expectedMode = "interactive" |
+    .lastVerdict = null |
+    .stages = [{id:"tb1",stage:"task_brainstorm",status:"running"}]'
+  drive "{\"agent_type\":\"general-purpose\",\"agent_id\":\"h1\",\"cwd\":\"$TMP\",\"session_id\":\"sess-t\"}"
+  [ "$(jq -r .status ".atelier/pipelines/$PID/pipeline-state.json")" = "running" ]
+}
