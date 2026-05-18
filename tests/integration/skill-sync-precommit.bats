@@ -10,12 +10,15 @@ setup() {
 @test "after sync, plugin's skills/ is byte-equivalent to atelier/skills/ (modulo exclusion list)" {
   bash "$ATELIER_CC_ROOT/scripts/sync-skills.sh"
   # sync-skills.sh deliberately omits upstream skills that don't apply to the
-  # CC plugin (see EXCLUDE in scripts/sync-skills.sh). Pass them as --exclude
-  # to diff so the test reflects what sync actually promises.
+  # CC plugin (EXCLUDE: in SRC, not DST) and preserves skills native to
+  # atelier-cc (NATIVE: in DST, not SRC). Both are asymmetries diff -r flags,
+  # so exclude both — keep this in lockstep with EXCLUDE + NATIVE in
+  # scripts/sync-skills.sh.
   diff -r \
     --exclude=benchmarking \
     --exclude=ralph-loop-help \
     --exclude=responding \
+    --exclude=create-pipeline \
     "$ATELIER_REPO/skills" "$ATELIER_CC_ROOT/skills"
 }
 
