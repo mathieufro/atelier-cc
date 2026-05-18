@@ -57,6 +57,24 @@ if [ "$last_status" = "running" ] && [ -z "$last_verdict" ]; then
   # only when atelier_signal is finally called, which PostToolUse handles
   # (main-agent signal, no agent_id). Silent no-op while the conversation runs.
   if [ "$expected_mode" = "interactive" ]; then
+    # Normal case: the agent ending its turn here is it yielding to the user
+    # mid-conversation → silent no-op (do not break the conversation).
+    #
+    # Recovery case: when the PREVIOUS stage was autonomous, SubagentStop
+    # handed the interactive directive to the main agent, which — fresh from
+    # orchestrating subagents — sometimes ends its turn WITHOUT engaging
+    # ("ending my turn so the orchestrator dispatches it") and the pipeline
+    # silently wedges (this no-op would otherwise let it sit forever). Re-emit
+    # the directive ONCE per dispatch, scoped to the autonomous→interactive
+    # handoff (previous stage row has a compiledPromptPath; interactive stages
+    # never do) so genuine conversational turns are never taxed.
+    prev_compiled="$(printf '%s' "$state" | jq -r '(.stages // []) | (if length>=2 then .[-2] else {} end) | .compiledPromptPath // ""')"
+    reemit_done="$(printf '%s' "$state" | jq -r '(.stages // []) | (last // {}) | .interactiveReemitted // false')"
+    if [ -n "$prev_compiled" ] && [ "$reemit_done" != "true" ]; then
+      ps_update "$wsp" "$pid" '.stages |= (.[:-1] + [.[-1] + {interactiveReemitted: true}])'
+      dispatch_reemit_existing "$wsp" "$pid"
+      exit 0
+    fi
     exit 0
   fi
   # Stage is mid-flight (subagent running, or interactive stage going). Don't

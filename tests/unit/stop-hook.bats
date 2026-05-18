@@ -140,6 +140,48 @@ drive_stop() {
   [ "$(echo "$state" | jq -r '.stages | length')" = "1" ]
 }
 
+@test "interactive after AUTONOMOUS stage: first Stop re-emits the directive ONCE (autonomous→interactive ghost recovery)" {
+  # fix/compile (autonomous, has compiledPromptPath) → interactive next. The
+  # main agent often ends its turn without engaging ("orchestrator dispatches
+  # it"). First Stop must re-emit so it doesn't silently wedge.
+  ps_update "$TMP" "$PID" '.currentStage = "brainstorm" | .expectedMode = "interactive" |
+    .expectedSkill = "brainstorming-feature" | .lastVerdict = null |
+    .stages = [
+      {id:"a1",stage:"compile_brainstorm",status:"completed",compiledPromptPath:"/tmp/c.md"},
+      {id:"b1",stage:"brainstorm",status:"running",compiledPromptPath:null,sessionId:null}
+    ]'
+  result="$(drive_stop "{\"cwd\":\"$TMP\",\"session_id\":\"sess-t\"}")"
+  [ "$(echo "$result" | jq -r .decision)" = "block" ]
+  [[ "$(echo "$result" | jq -r .reason)" == *"Run this stage YOURSELF"* ]]
+  state="$(cat ".atelier/pipelines/$PID/pipeline-state.json")"
+  [ "$(echo "$state" | jq -r '.stages[-1].interactiveReemitted')" = "true" ]
+  [ "$(echo "$state" | jq -r '.stages | length')" = "2" ]
+  [ "$(echo "$state" | jq -r .status)" = "running" ]
+}
+
+@test "interactive after autonomous: SECOND Stop (already re-emitted) is a silent no-op (conversation can flow)" {
+  ps_update "$TMP" "$PID" '.currentStage = "brainstorm" | .expectedMode = "interactive" |
+    .expectedSkill = "brainstorming-feature" | .lastVerdict = null |
+    .stages = [
+      {id:"a1",stage:"compile_brainstorm",status:"completed",compiledPromptPath:"/tmp/c.md"},
+      {id:"b1",stage:"brainstorm",status:"running",compiledPromptPath:null,sessionId:null,interactiveReemitted:true}
+    ]'
+  result="$(drive_stop "{\"cwd\":\"$TMP\",\"session_id\":\"sess-t\"}")"
+  [ -z "$result" ]
+}
+
+@test "interactive after INTERACTIVE (no prev compiledPromptPath): first Stop is a silent no-op (not taxed)" {
+  ps_update "$TMP" "$PID" '.currentStage = "brainstorm" | .expectedMode = "interactive" |
+    .expectedSkill = "brainstorming-feature" | .lastVerdict = null |
+    .stages = [
+      {id:"p1",stage:"classify",status:"completed",compiledPromptPath:null},
+      {id:"b1",stage:"brainstorm",status:"running",compiledPromptPath:null,sessionId:null}
+    ]'
+  result="$(drive_stop "{\"cwd\":\"$TMP\",\"session_id\":\"sess-t\"}")"
+  [ -z "$result" ]
+  [ "$(jq -r '.stages[-1].interactiveReemitted // false' ".atelier/pipelines/$PID/pipeline-state.json")" = "false" ]
+}
+
 @test "verdict=done advances to next stage (autonomous)" {
   ps_update "$TMP" "$PID" '.currentStage = "brainstorm" | .lastVerdict = "done" |
     .stages = [{id:"b1",stage:"brainstorm",status:"completed"}]'
