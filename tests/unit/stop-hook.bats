@@ -110,16 +110,34 @@ drive_stop() {
   [ "$(jq -r .currentStage ".atelier/pipelines/$PID/pipeline-state.json")" = "brainstorm" ]
 }
 
-@test "interactive dispatch reason forbids subagent delegation (run-it-yourself)" {
+@test "interactive dispatch reason: conversational, end-turn-to-yield, no delegation, no AskUserQuestion" {
   result="$(drive_stop "{\"cwd\":\"$TMP\",\"session_id\":\"sess-t\"}")"
   reason="$(echo "$result" | jq -r .reason)"
   [[ "$reason" == *"Run this stage YOURSELF"* ]]
+  [[ "$reason" == *"back-and-forth chat"* ]]
+  [[ "$reason" == *"end your turn"* ]]
   [[ "$reason" == *"do NOT call the Agent tool"* ]]
   [[ "$reason" == *"SendMessage"* ]]
-  [[ "$reason" == *"AskUserQuestion"* ]]
+  # Must steer AWAY from AskUserQuestion (conversational is the design).
+  [[ "$reason" == *"Do NOT use AskUserQuestion"* ]]
   # Still carries the methodology + signaling contract.
   [[ "$reason" == *"Body of brainstorming-feature"* ]]
   [[ "$reason" == *"atelier_signal"* ]]
+}
+
+@test "interactive stage mid-conversation: Stop is a SILENT no-op (turn-end yields to user, never blocks)" {
+  # The core fix: while an interactive stage is running and unsignaled, the
+  # agent ending its turn IS it asking the user something and yielding. Stop
+  # must not re-emit/block — a block would stop the user ever answering.
+  ps_update "$TMP" "$PID" '.currentStage = "brainstorm" | .expectedMode = "interactive" |
+    .lastVerdict = null |
+    .stages = [{id:"b1",stage:"brainstorm",status:"running",compiledPromptPath:null,sessionId:null}]'
+  result="$(drive_stop "{\"cwd\":\"$TMP\",\"session_id\":\"sess-t\"}")"
+  [ -z "$result" ]
+  state="$(cat ".atelier/pipelines/$PID/pipeline-state.json")"
+  [ "$(echo "$state" | jq -r .status)" = "running" ]
+  [ "$(echo "$state" | jq -r '.stages[-1].status')" = "running" ]
+  [ "$(echo "$state" | jq -r '.stages | length')" = "1" ]
 }
 
 @test "verdict=done advances to next stage (autonomous)" {

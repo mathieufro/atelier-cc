@@ -47,9 +47,12 @@ drive() {
   ps_update "$TMP" "$PID" '.expectedMode = "interactive" | .currentStage = "task_brainstorm"'
   out="$(drive "{\"tool_name\":\"Agent\",\"cwd\":\"$TMP\",\"session_id\":\"sess-t\",\"tool_input\":{\"subagent_type\":\"atelier:atelier-stage-worker\",\"description\":\"atelier:task_brainstorm continuation\",\"prompt\":\"x\"}}")"
   [ "$(echo "$out" | jq -r .hookSpecificOutput.permissionDecision)" = "deny" ]
-  [[ "$(echo "$out" | jq -r .hookSpecificOutput.permissionDecisionReason)" == *"task_brainstorm"* ]]
-  [[ "$(echo "$out" | jq -r .hookSpecificOutput.permissionDecisionReason)" == *"INTERACTIVE"* ]]
-  [[ "$(echo "$out" | jq -r .hookSpecificOutput.permissionDecisionReason)" == *"AskUserQuestion"* ]]
+  reason="$(echo "$out" | jq -r .hookSpecificOutput.permissionDecisionReason)"
+  [[ "$reason" == *"task_brainstorm"* ]]
+  [[ "$reason" == *"INTERACTIVE"* ]]
+  [[ "$reason" == *"conversation"* ]]
+  [[ "$reason" == *"end your turn"* ]]
+  [[ "$reason" != *"Ask the user directly with AskUserQuestion"* ]]
 }
 
 @test "interactive stage: Agent with atelier:* description is DENIED even if subagent_type differs" {

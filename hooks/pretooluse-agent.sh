@@ -37,7 +37,7 @@ if [ "$mode" != "autonomous" ]; then
       hookSpecificOutput: {
         hookEventName: "PreToolUse",
         permissionDecision: "deny",
-        permissionDecisionReason: ("\($s) is an INTERACTIVE stage — you, the main agent, must run it YOURSELF in this conversation. Do NOT spawn a stage-worker subagent and do NOT use SendMessage. Ask the user directly with AskUserQuestion, do the work, write the artifact to the required path, then call mcp__atelier__atelier_signal and end your turn.")
+        permissionDecisionReason: ("\($s) is an INTERACTIVE stage — you, the main agent, must run it YOURSELF as a normal conversation with the user. Do NOT spawn a stage-worker subagent and do NOT use SendMessage. Ask one question at a time as plain conversational text (recommendation + rationale + options per the stage skill), then end your turn — control yields cleanly to the user and their reply comes back as the next message; you do NOT need AskUserQuestion to pause. Do the work, write the artifact, then call mcp__atelier__atelier_signal.")
       }
     }'
   fi

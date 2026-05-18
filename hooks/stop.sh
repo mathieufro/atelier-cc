@@ -45,7 +45,20 @@ esac
 # strand the pipeline after the very first autonomous stage signals done.
 last_status="$(printf '%s' "$state" | jq -r '(.stages // []) | (last // {}) | .status // ""')"
 last_verdict="$(printf '%s' "$state" | jq -r '.lastVerdict // empty')"
+expected_mode="$(printf '%s' "$state" | jq -r '.expectedMode // empty')"
 if [ "$last_status" = "running" ] && [ -z "$last_verdict" ]; then
+  # Interactive stage mid-conversation. The main agent IS the brainstorm/plan
+  # agent: it asks the user a question (conversationally — recommendation +
+  # rationale + options, per the stage skill) and ENDS ITS TURN so the user
+  # can reply. That turn-end is correct and expected, not a ghost. We must NOT
+  # re-emit or block here — a block decision prevents the turn from ending, so
+  # the user could never answer (this is exactly why the flow used to need
+  # AskUserQuestion / a subagent). Advancement for an interactive stage happens
+  # only when atelier_signal is finally called, which PostToolUse handles
+  # (main-agent signal, no agent_id). Silent no-op while the conversation runs.
+  if [ "$expected_mode" = "interactive" ]; then
+    exit 0
+  fi
   # Stage is mid-flight (subagent running, or interactive stage going). Don't
   # re-dispatch. EXCEPT: detect the "ghost stage" case where SubagentStop
   # dispatched the next stage (appended a running row, emitted a block reason)
