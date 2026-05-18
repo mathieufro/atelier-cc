@@ -84,6 +84,24 @@ PLAN_TOPOLOGY='{
   [ "$(echo "$result" | jq -r .stage.name)" = "write_plan" ]
 }
 
+@test "verdict=has_issues on a FIX stage re-dispatches the parent review (never terminate-completed)" {
+  # Regression (mit-relicensing): a fix stage signaling has_issues used to fall
+  # through to topology_next_after — empty for synthesized fix_* → terminate
+  # "completed", silently shipping with the review's issues unresolved.
+  state='{"currentStage":"fix_spec","lastVerdict":"has_issues","fixAttempts":{"review_spec":1},"stages":[{"id":"rs1","stage":"review_spec","status":"completed"},{"id":"fs1","stage":"fix_spec","status":"completed","dynamicallyInserted":true,"parentReviewStageId":"rs1"}]}'
+  result="$(routing_decide "$state" "$TOPOLOGY")"
+  [ "$(echo "$result" | jq -r .kind)" = "dispatch" ]
+  [ "$(echo "$result" | jq -r .stage.name)" = "review_spec" ]
+  [ "$(echo "$result" | jq -r .kind)" != "terminate" ]
+}
+
+@test "verdict=has_issues on a fix stage whose parent review is not in topology pauses idle (never terminate)" {
+  state='{"currentStage":"fix_ghost","lastVerdict":"has_issues","fixAttempts":{},"stages":[{"id":"fg1","stage":"fix_ghost","status":"completed","dynamicallyInserted":true}]}'
+  result="$(routing_decide "$state" "$TOPOLOGY")"
+  [ "$(echo "$result" | jq -r .kind)" = "pause" ]
+  [ "$(echo "$result" | jq -r .newStatus)" = "idle" ]
+}
+
 @test "verdict=has_issues at fix attempt cap pauses pipeline" {
   state='{"currentStage":"review_spec","lastVerdict":"has_issues","fixAttempts":{"review_spec":5},"stages":[{"id":"rs1","stage":"review_spec","status":"completed"}]}'
   result="$(routing_decide "$state" "$TOPOLOGY")"

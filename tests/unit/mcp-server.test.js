@@ -175,6 +175,63 @@ describe("atelier_signal tool", () => {
     expect(res.content[0].text).toMatch(/ignored/)
   })
 
+  it("duplicate completion signal is an idempotent no-op (does not re-stamp)", async () => {
+    await client.callTool({
+      name: "atelier_signal",
+      arguments: { type: "stage_complete", pipelineId: pid, verdict: "done", outputPath: path.join(wsp, ".atelier", "pipelines", pid, "01-impl.md") },
+    })
+    // Second signal for the now-completed stage must change nothing.
+    const res = await client.callTool({
+      name: "atelier_signal",
+      arguments: { type: "stage_complete", pipelineId: pid, verdict: "stuck" },
+    })
+    const state = JSON.parse(fs.readFileSync(statePath, "utf8"))
+    expect(res.content[0].text).toMatch(/ignored/)
+    expect(state.lastVerdict).toBe("done")        // not overwritten with "stuck"
+    expect(state.stages[0].verdict).toBe("done")
+    expect(state.stages[0].status).toBe("completed")
+  })
+
+  it("stale signal does NOT poison a freshly-appended, never-launched next stage row (mit-relicensing regression)", async () => {
+    // Exact shape of the corruption: review completed, fix_* row appended by
+    // SubagentStop but never launched (compiledPromptPath null). The review
+    // worker fires a 2nd signal; it must NOT mark the fix stage completed.
+    const st = JSON.parse(fs.readFileSync(statePath, "utf8"))
+    st.currentStage = "fix_quick_plan"
+    st.expectedMode = "autonomous"
+    st.lastVerdict = null
+    st.stages = [
+      { id: "r1", stage: "review_quick_plan", status: "completed", verdict: "has_issues", compiledPromptPath: "/tmp/r.md" },
+      { id: "f1", stage: "fix_quick_plan", status: "running", compiledPromptPath: null, sessionId: null },
+    ]
+    fs.writeFileSync(statePath, JSON.stringify(st))
+    const res = await client.callTool({
+      name: "atelier_signal",
+      arguments: { type: "stage_complete", pipelineId: pid, verdict: "has_issues" },
+    })
+    const state = JSON.parse(fs.readFileSync(statePath, "utf8"))
+    expect(res.content[0].text).toMatch(/ignored/)
+    expect(state.stages[1].status).toBe("running")     // fix row untouched
+    expect(state.stages[1].verdict).toBeUndefined()
+    expect(state.lastVerdict).toBe(null)               // not advanced
+  })
+
+  it("legit autonomous signal applies once the worker was actually launched (compiledPromptPath set)", async () => {
+    const st = JSON.parse(fs.readFileSync(statePath, "utf8"))
+    st.currentStage = "fix_quick_plan"
+    st.expectedMode = "autonomous"
+    st.stages = [{ id: "f1", stage: "fix_quick_plan", status: "running", compiledPromptPath: "/tmp/f.md", sessionId: null }]
+    fs.writeFileSync(statePath, JSON.stringify(st))
+    await client.callTool({
+      name: "atelier_signal",
+      arguments: { type: "stage_complete", pipelineId: pid, verdict: "done" },
+    })
+    const state = JSON.parse(fs.readFileSync(statePath, "utf8"))
+    expect(state.stages[0].status).toBe("completed")
+    expect(state.stages[0].verdict).toBe("done")
+    expect(state.lastVerdict).toBe("done")
+  })
+
   it("stores action for plan-gate", async () => {
     await client.callTool({
       name: "atelier_signal",

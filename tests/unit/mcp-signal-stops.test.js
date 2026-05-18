@@ -15,7 +15,7 @@ describe("MCP signal stop-the-turn text (regression)", () => {
     const pid = "2026-05-14-x-a1b2"
     fs.mkdirSync(path.join(wsp, ".atelier", "pipelines", pid), { recursive: true })
     fs.writeFileSync(path.join(wsp, ".atelier", "pipelines", pid, "pipeline-state.json"), JSON.stringify({
-      id: pid, status: "running", prompt: "x", type: "feature",
+      id: pid, status: "running", prompt: "x", type: "feature", currentStage: "x",
       stages: [{ id: "s1", stage: "x", status: "running" }],
       pipelineDir: `.atelier/pipelines/${pid}`, workspacePath: wsp,
       createdAt: Date.now(), updatedAt: Date.now(),

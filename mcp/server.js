@@ -112,10 +112,14 @@ server.registerTool(
       const now = Date.now()
       state.updatedAt = now
       state.lastHeartbeatMs = now
-      if (args.verdict !== undefined) state.lastVerdict = args.verdict
-      if (args.outputPath !== undefined) state.lastOutputPath = args.outputPath
-      if (args.action !== undefined) state.lastAction = args.action
-      if (args.outcome !== undefined) state.lastOutcome = args.outcome
+
+      // A signal carrying verdict/action/outcome is a stage COMPLETION (classify
+      // carries none of these — only pipelineType/worktreeChoice). Completion
+      // signals must be idempotent and targeted: a worker that signals TWICE
+      // (or whose signal lands after SubagentStop already appended the next
+      // stage's row) must not stamp its verdict onto a stage it never ran.
+      const isCompletion =
+        args.verdict !== undefined || args.action !== undefined || args.outcome !== undefined
 
       if (args.pipelineType !== undefined || args.worktreeChoice !== undefined || args.currentStage !== undefined) {
         if (state.currentStage == null) {
@@ -132,16 +136,51 @@ server.registerTool(
         }
       }
 
-      const stages = state.stages || []
-      const last = stages[stages.length - 1]
-      if (last) {
-        if (args.verdict !== undefined) last.verdict = args.verdict
-        if (args.outputPath !== undefined) last.outputPath = args.outputPath
-        last.completedAt = now
-        last.status = args.verdict === "partial" ? "idle" : "completed"
-        if (last.assignedOutputPath && args.outputPath && !fs.existsSync(args.outputPath)) {
-          last.status = "stuck"
-          last.error = `missing artifact: ${args.outputPath}`
+      if (isCompletion) {
+        const stages = state.stages || []
+        // Target the LAST in-flight row for the CURRENT stage — never blindly
+        // stages[length-1]. If a previous stage's worker double-fires, by the
+        // time the 2nd signal arrives SubagentStop has already appended the
+        // NEXT stage's row; writing to stages[-1] would mark a stage that
+        // never executed as completed (the mit-relicensing corruption).
+        let idx = -1
+        for (let i = stages.length - 1; i >= 0; i--) {
+          const s = stages[i]
+          if (s && s.stage === state.currentStage &&
+              (s.status === "running" || s.status === "idle")) { idx = i; break }
+        }
+        const row = idx === -1 ? null : stages[idx]
+
+        // Idempotency / anti-corruption guards. A signal is stale/duplicate —
+        // and must be a no-op (not touch lastVerdict or any row) — when:
+        //  (a) there is no in-flight row for currentStage (already completed), or
+        //  (b) the in-flight autonomous row was dispatched but never launched
+        //      (compiledPromptPath == null): the real worker for it can't have
+        //      signalled yet, so this signal is the *previous* worker firing
+        //      again. (Interactive stages have no compiledPromptPath and are
+        //      run by the main agent, so this leg is autonomous-only.)
+        const stale =
+          row == null ||
+          (state.expectedMode === "autonomous" && row.compiledPromptPath == null)
+        if (stale) {
+          try { atomicWriteState(spPath, state) } catch (e) {
+            return { isError: true, content: [{ type: "text", text: `Failed to write state: ${e.message}` }] }
+          }
+          return { content: [{ type: "text", text: "Stage signal received, but this stage is already complete — duplicate/stale signal ignored (the orchestrator has already advanced). End your turn now; do not signal again." }] }
+        }
+
+        if (args.verdict !== undefined) state.lastVerdict = args.verdict
+        if (args.outputPath !== undefined) state.lastOutputPath = args.outputPath
+        if (args.action !== undefined) state.lastAction = args.action
+        if (args.outcome !== undefined) state.lastOutcome = args.outcome
+
+        if (args.verdict !== undefined) row.verdict = args.verdict
+        if (args.outputPath !== undefined) row.outputPath = args.outputPath
+        row.completedAt = now
+        row.status = args.verdict === "partial" ? "idle" : "completed"
+        if (row.assignedOutputPath && args.outputPath && !fs.existsSync(args.outputPath)) {
+          row.status = "stuck"
+          row.error = `missing artifact: ${args.outputPath}`
         }
       }
 
