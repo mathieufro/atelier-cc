@@ -70,9 +70,30 @@ EOF
   ps_update "$TMP" "$PID" '.currentStage = "write_plan" | .expectedSkill = "writing-plans"'
   output="$("$ATELIER_CC_ROOT/scripts/compile-prompt.sh" "$PID" "write_plan")"
   [[ "$output" == *"atelier_signal"* ]]
-  [[ "$output" == *"STOP YOUR TURN IMMEDIATELY"* ]]
+  # Turn-ending instruction, not the self-defeating "no further output".
+  [[ "$output" == *"end your turn"* ]]
+  [[ "$output" != *"no further output or tool calls"* ]]
   [[ "$output" == *"partial"* ]]
   [[ "$output" == *"progress.md"* ]]
+}
+
+@test "compile-prompt feeds compile_plan output to write_plan as authoritative prompt (not raw skill)" {
+  compiled="$TMP/.atelier/pipelines/$PID/05-compile_plan.md"
+  printf 'COMPILED-PLAN-PROMPT-CONTENT for the writer.' > "$compiled"
+  ps_append_stage "$TMP" "$PID" "compile_plan" "autonomous" "compiling-plan" "$compiled"
+  ps_complete_stage "$TMP" "$PID" "done" "$compiled"
+  ps_update "$TMP" "$PID" '.currentStage = "write_plan" | .expectedSkill = "writing-plans"'
+  output="$("$ATELIER_CC_ROOT/scripts/compile-prompt.sh" "$PID" "write_plan")"
+  [[ "$output" == *"COMPILED-PLAN-PROMPT-CONTENT for the writer."* ]]
+  [[ "$output" == *"Compiled Prompt (from compile_plan"* ]]
+  [[ "$output" != *"Body of skill."* ]]
+}
+
+@test "compile-prompt falls back to raw skill for write_plan when no compile_plan artifact" {
+  ps_update "$TMP" "$PID" '.currentStage = "write_plan" | .expectedSkill = "writing-plans"'
+  output="$("$ATELIER_CC_ROOT/scripts/compile-prompt.sh" "$PID" "write_plan")"
+  [[ "$output" == *"Body of skill."* ]]
+  [[ "$output" != *"Compiled Prompt (from compile_plan"* ]]
 }
 
 @test "compile-prompt dies for missing skill" {

@@ -30,6 +30,35 @@ _strip_frontmatter() {
 skill_file="$(skill_resolve "$skill")"
 skill_body="$(_strip_frontmatter "$skill_file")"
 
+# write_plan / write_e2e_plan are autonomous stages whose prompt SHOULD BE the
+# preceding compile stage's output — the compiled prompt IS the system prompt
+# (mirrors atelier runAutonomousStage's compiledPromptForStage:
+# write_plan←compile_plan, write_e2e_plan←compile_e2e_plan, stage-runner.ts).
+# Feeding the raw skill instead silently discards the entire compile_* stage
+# (its codebase-orientation work) — the same class of bug fixed for the
+# interactive brainstorm family in lib/dispatch.sh _interactive_stage_body.
+# Fall back to the raw skill when no compiled artifact exists so arbitrary
+# custom topologies (a bare write_plan with no compile prelude) still work.
+_compile_src=""
+case "$stage" in
+  write_plan)     _compile_src="compile_plan" ;;
+  write_e2e_plan) _compile_src="compile_e2e_plan" ;;
+esac
+instruction_label="## Skill: $skill"
+instruction_body="$skill_body"
+if [ -n "$_compile_src" ]; then
+  _compiled_out="$(jq -r --arg s "$_compile_src" '
+    [ .stages[]
+      | select(.stage == $s
+                and (.status // "") == "completed"
+                and (.outputPath // "") != "") ]
+    | last // {} | .outputPath // empty' "$(ps_path "$wsp" "$pid")" 2>/dev/null || true)"
+  if [ -n "$_compiled_out" ] && [ -s "$_compiled_out" ]; then
+    instruction_label="## Compiled Prompt (from $_compile_src — these are your authoritative instructions for this stage)"
+    instruction_body="$(cat "$_compiled_out")"
+  fi
+fi
+
 # Compile stages compile FOR a downstream writing stage. The compiler skill
 # (e.g. `compiling-plan`) instructs the agent to embed the target stage skill
 # verbatim in its output, so we MUST supply that target skill here — otherwise
@@ -109,8 +138,8 @@ $prompt
 ## Prior Stage Outputs
 $prior
 $output_block$resume_block
-## Skill: $skill
-$skill_body
+$instruction_label
+$instruction_body
 $stage_skill_block
 
 ## Signaling
@@ -126,7 +155,7 @@ mcp__atelier__atelier_signal({
 })
 \`\`\`
 
-Then STOP YOUR TURN IMMEDIATELY — no further output or tool calls.
+Then end your turn with a single short sentence (e.g. "Stage complete."). Do not do any more work or call any more tools — ending your turn (not emitting nothing) is how control returns to the orchestrator; an empty or never-ending turn wedges the pipeline.
 
 If you cannot complete the stage, write progress.md and call \`atelier_signal({type:"stage_complete", pipelineId:"$pid", verdict:"partial", outputPath:"<progress.md path>"})\`.
 EOF
