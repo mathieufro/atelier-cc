@@ -10,7 +10,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const SERVER_JS = path.resolve(__dirname, "../../mcp/server.js")
 
 describe("MCP signal stop-the-turn text (regression)", () => {
-  it("returns the exact stop-the-turn semantic phrase", async () => {
+  it("instructs a concrete turn-ending act, not the self-defeating 'no output'", async () => {
     const wsp = fs.mkdtempSync(path.join(os.tmpdir(), "atelier-reg-"))
     const pid = "2026-05-14-x-a1b2"
     fs.mkdirSync(path.join(wsp, ".atelier", "pipelines", pid), { recursive: true })
@@ -30,8 +30,17 @@ describe("MCP signal stop-the-turn text (regression)", () => {
       name: "atelier_signal",
       arguments: { type: "stage_complete", pipelineId: pid, verdict: "done" },
     })
-    expect(res.content[0].text).toContain("Stage signal received")
-    expect(res.content[0].text).toContain("STOP YOUR TURN IMMEDIATELY")
+    const text = res.content[0].text
+    expect(text).toContain("Stage signal received")
+    // Must give the model a concrete terminal act so the turn actually ends
+    // (that is what fires Stop / SubagentStop).
+    expect(text).toContain("End your turn")
+    expect(text).toContain("Stage complete.")
+    // The old wording forbade ALL output, which left a subagent no way to emit
+    // the final message that closes its turn — it looped in thinking and the
+    // pipeline wedged. That self-defeating instruction must be gone.
+    expect(text).not.toContain("no further output")
+    expect(text).not.toContain("no further tool calls")
     await client.close()
     fs.rmSync(wsp, { recursive: true, force: true })
   })

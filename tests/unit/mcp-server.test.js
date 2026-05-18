@@ -59,7 +59,8 @@ describe("atelier_signal tool", () => {
       name: "atelier_signal",
       arguments: { type: "stage_complete", pipelineId: pid, verdict: "done", outputPath: outPath },
     })
-    expect(res.content[0].text).toMatch(/STOP YOUR TURN IMMEDIATELY/)
+    expect(res.content[0].text).toMatch(/Stage signal received/)
+    expect(res.content[0].text).toMatch(/End your turn/)
     const state = JSON.parse(fs.readFileSync(statePath, "utf8"))
     expect(state.lastVerdict).toBe("done")
     expect(state.lastOutputPath).toBe(outPath)

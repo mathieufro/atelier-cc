@@ -153,9 +153,17 @@ server.registerTool(
     } finally {
       releaseLock(spPath)
     }
+    // The turn must END here — that is the signal the orchestrator's Stop /
+    // SubagentStop hook waits for. Telling the model "no output at all" is
+    // self-defeating: a subagent returns control to the parent by emitting a
+    // final assistant message, so "emit nothing" gives it no way to close the
+    // turn and it loops in thinking instead (the pipeline then wedges). Give
+    // it a concrete terminal act — one short sentence, then stop.
+    const stop =
+      "Your stage is COMPLETE and recorded. Do NOT do any more work, call any more tools, or start the next stage — the orchestrator routes from here. End your turn NOW by replying with exactly one short sentence (e.g. \"Stage complete.\"). That closing reply is mandatory and is how control returns to the orchestrator — without it the pipeline cannot advance."
     const text = classifyIgnored
-      ? "Stage signal received. (pipelineType/worktreeChoice ignored — pipeline already past classify gate.) STOP YOUR TURN IMMEDIATELY — no further output or tool calls."
-      : "Stage signal received. STOP YOUR TURN IMMEDIATELY — no further output or tool calls."
+      ? `Stage signal received. (pipelineType/worktreeChoice ignored — pipeline already past classify gate.) ${stop}`
+      : `Stage signal received. ${stop}`
     return { content: [{ type: "text", text }] }
   }
 )
