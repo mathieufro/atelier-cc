@@ -33,7 +33,12 @@ compiled="$("$ROOT/scripts/compile-prompt.sh" "$pid" "$stage")"
 # dispatch was emitted but the main agent never called Agent (e.g. it got
 # confused by the just-completed subagent's terminal text and stopped without
 # acting on the block reason). Stop uses that signal to re-emit the dispatch.
-compiled_dir="$wsp/.atelier/pipelines/$pid/.compiled"
+# Transient scaffolding: consumed immediately (passed via updatedInput.prompt
+# below). Afterward only compiledPromptPath's *presence in state* matters as the
+# "main agent actually launched Agent" marker — the file is never stat'd or
+# re-read. Keep it OUT of the workspace so .atelier/pipelines/<id>/ doesn't
+# accrue dead .compiled/ prompt dumps that pollute the user's repo.
+compiled_dir="${TMPDIR:-/tmp}/atelier-cc/$pid/compiled"
 mkdir -p "$compiled_dir"
 compiled_path="$compiled_dir/$(epoch_ms)-${stage}.md"
 printf '%s' "$compiled" > "$compiled_path"

@@ -9,6 +9,9 @@
     "PreToolUse": [
       { "matcher": "Agent", "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pretooluse-agent.sh" }] }
     ],
+    "PostToolUse": [
+      { "matcher": "mcp__.*atelier_signal", "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/posttooluse-signal.sh" }] }
+    ],
     "SessionStart": [
       { "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh" }] }
     ]

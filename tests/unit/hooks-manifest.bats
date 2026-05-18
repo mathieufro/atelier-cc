@@ -14,6 +14,16 @@
   [ "$matcher" = "Agent" ]
 }
 
+@test "PostToolUse hook matches the atelier_signal MCP tool (both naming forms)" {
+  hf="$BATS_TEST_DIRNAME/../../hooks/hooks.json"
+  matcher="$(jq -r '.hooks.PostToolUse[0].matcher' "$hf")"
+  # Must match the canonical deployed name and the marketplace-namespaced name.
+  [[ "mcp__atelier__atelier_signal" =~ $matcher ]]
+  [[ "mcp__plugin_atelier_atelier__atelier_signal" =~ $matcher ]]
+  cmd="$(jq -r '.hooks.PostToolUse[0].hooks[0].command' "$hf")"
+  [[ "$cmd" == *'posttooluse-signal.sh'* ]]
+}
+
 @test "all hook command paths use CLAUDE_PLUGIN_ROOT" {
   hf="$BATS_TEST_DIRNAME/../../hooks/hooks.json"
   for cmd in $(jq -r '.. | .command? // empty' "$hf"); do
