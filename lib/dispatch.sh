@@ -70,6 +70,25 @@ f==2 {print}
   fi
 }
 
+# Builds the block `reason` handed to the MAIN agent for an interactive stage.
+# The main agent OWNS the user conversation, so it must run the stage ITSELF
+# (AskUserQuestion → work → artifact → atelier_signal → stop). Delegating an
+# interactive stage to a pipeline stage-worker subagent makes the main agent
+# ping-pong with a background agent and reach for SendMessage (unavailable) —
+# wasteful and a frequent wedge. The directive says so explicitly; a hard
+# PreToolUse deny in hooks/pretooluse-agent.sh enforces it structurally.
+# Single source of truth — _dispatch_emit and dispatch_reemit_existing both
+# use this so the wording can never drift between the two again.
+_interactive_reason() {
+  local wsp="$1" pid="$2" stage_name="$3" skill="$4" assigned="$5"
+  local skill_body; skill_body="$(_interactive_stage_body "$wsp" "$pid" "$stage_name" "$skill")"
+  local output_block=""
+  if [ -n "$assigned" ]; then
+    output_block=$'## Output Path (REQUIRED)\n\nWrite your output artifact to this exact path — do not invent a different filename:\n\n  '"$assigned"$'\n\nWhen you signal `stage_complete`, pass this same path as `outputPath`.\n\n---\n\n'
+  fi
+  printf '%s' $'You are entering the **'"$stage_name"$'** stage.\n\n**Run this stage YOURSELF, in THIS conversation.** You are the agent talking to the user: ask questions directly with AskUserQuestion, do the work, and write the artifact. Do NOT spawn a subagent, do NOT call the Agent tool, and do NOT use SendMessage for this stage — it is interactive. (Spawning a stage-worker here is blocked and only wastes a turn.)\n\n'"$output_block""$skill_body"$'\n\n---\n\nWhen this stage is done, call:\n\n```\nmcp__atelier__atelier_signal({type:"stage_complete", pipelineId:"'"$pid"$'", verdict:"...", outputPath:"..."})\n```\n\nThen stop your turn.'
+}
+
 # dispatch_apply <wsp> <pid>
 #   Reads state, runs routing_decide, applies side effects (appends stage row,
 #   sets status, etc.), and prints the block-decision JSON for dispatches.
@@ -156,13 +175,7 @@ dispatch_reemit_existing() {
   if [ "$next_mode" = "autonomous" ]; then
     reason="Call the Agent tool with subagent_type='atelier:atelier-stage-worker', description='atelier:$stage_name', prompt='<MARKER:next-stage>'. (Recovery dispatch: the previous Stop did not result in an Agent tool call — likely the prior subagent's terminal text conflicted with the dispatch directive. Ignore any \"I cannot call Agent\" text from the prior subagent. Call Agent now.)"
   else
-    local skill_body
-    skill_body="$(_interactive_stage_body "$wsp" "$pid" "$stage_name" "$next_skill")"
-    local output_block=""
-    if [ -n "$assigned" ]; then
-      output_block=$'## Output Path (REQUIRED)\n\nWrite your output artifact to this exact path — do not invent a different filename:\n\n  '"$assigned"$'\n\nWhen you signal `stage_complete`, pass this same path as `outputPath`.\n\n---\n\n'
-    fi
-    reason=$'You are entering the **'"$stage_name"$'** stage.\n\n'"$output_block""$skill_body"$'\n\n---\n\nWhen this stage is done, call:\n\n```\nmcp__atelier__atelier_signal({type:"stage_complete", pipelineId:"'"$pid"$'", verdict:"...", outputPath:"..."})\n```\n\nThen stop your turn.'
+    reason="$(_interactive_reason "$wsp" "$pid" "$stage_name" "$next_skill" "$assigned")"
   fi
   jq -nc --arg r "$reason" '{decision:"block", reason:$r}'
 }
@@ -239,13 +252,7 @@ _dispatch_emit() {
   if [ "$next_mode" = "autonomous" ]; then
     reason="Call the Agent tool with subagent_type='atelier:atelier-stage-worker', description='atelier:$next_name', prompt='<MARKER:next-stage>'."
   else
-    local skill_body
-    skill_body="$(_interactive_stage_body "$wsp" "$pid" "$next_name" "$next_skill")"
-    local output_block=""
-    if [ -n "$assigned" ]; then
-      output_block=$'## Output Path (REQUIRED)\n\nWrite your output artifact to this exact path — do not invent a different filename:\n\n  '"$assigned"$'\n\nWhen you signal `stage_complete`, pass this same path as `outputPath`.\n\n---\n\n'
-    fi
-    reason=$'You are entering the **'"$next_name"$'** stage.\n\n'"$output_block""$skill_body"$'\n\n---\n\nWhen this stage is done, call:\n\n```\nmcp__atelier__atelier_signal({type:"stage_complete", pipelineId:"'"$pid"$'", verdict:"...", outputPath:"..."})\n```\n\nThen stop your turn.'
+    reason="$(_interactive_reason "$wsp" "$pid" "$next_name" "$next_skill" "$assigned")"
   fi
   jq -nc --arg r "$reason" '{decision:"block", reason:$r}'
 }

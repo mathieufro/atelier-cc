@@ -20,9 +20,30 @@ pid="$(find_owned_pipeline "$wsp" "$session_id")"
 sp="$(ps_path "$wsp" "$pid")"
 [ -f "$sp" ] || exit 0
 mode="$(jq -r '.expectedMode // empty' "$sp")"
-[ "$mode" = "autonomous" ] || exit 0
+stage="$(jq -r '.currentStage // empty' "$sp")"
 
-stage="$(jq -r .currentStage "$sp")"
+if [ "$mode" != "autonomous" ]; then
+  # Interactive stage (or pre-classify). The MAIN agent owns the user
+  # conversation and MUST run the stage itself (AskUserQuestion → work →
+  # artifact → atelier_signal → stop). Delegating an interactive stage to a
+  # pipeline stage-worker subagent makes the main agent ping-pong with a
+  # background agent and reach for SendMessage (unavailable) — wasteful and a
+  # frequent wedge. Hard-deny that specific delegation; allow unrelated helper
+  # subagents (research, parallel exploration, etc.) to pass through.
+  sub="$(printf '%s' "$input" | jq -r '.tool_input.subagent_type // ""')"
+  desc="$(printf '%s' "$input" | jq -r '.tool_input.description // ""')"
+  if [ "$sub" = "atelier:atelier-stage-worker" ] || [[ "$desc" == atelier:* ]]; then
+    jq -nc --arg s "${stage:-this}" '{
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: "deny",
+        permissionDecisionReason: ("\($s) is an INTERACTIVE stage — you, the main agent, must run it YOURSELF in this conversation. Do NOT spawn a stage-worker subagent and do NOT use SendMessage. Ask the user directly with AskUserQuestion, do the work, write the artifact to the required path, then call mcp__atelier__atelier_signal and end your turn.")
+      }
+    }'
+  fi
+  exit 0
+fi
+
 model="$(jq -r '.expectedModel // empty' "$sp")"
 
 compiled="$("$ROOT/scripts/compile-prompt.sh" "$pid" "$stage")"

@@ -37,9 +37,30 @@ drive() {
   [ -z "$out" ]
 }
 
-@test "Agent tool in interactive stage: passes through" {
+@test "Agent tool in interactive stage with no stage-worker delegation: passes through" {
   ps_update "$TMP" "$PID" '.expectedMode = "interactive"'
   out="$(drive "{\"tool_name\":\"Agent\",\"cwd\":\"$TMP\",\"session_id\":\"sess-t\"}")"
+  [ -z "$out" ]
+}
+
+@test "interactive stage: delegating to atelier:atelier-stage-worker is DENIED (no ping-pong)" {
+  ps_update "$TMP" "$PID" '.expectedMode = "interactive" | .currentStage = "task_brainstorm"'
+  out="$(drive "{\"tool_name\":\"Agent\",\"cwd\":\"$TMP\",\"session_id\":\"sess-t\",\"tool_input\":{\"subagent_type\":\"atelier:atelier-stage-worker\",\"description\":\"atelier:task_brainstorm continuation\",\"prompt\":\"x\"}}")"
+  [ "$(echo "$out" | jq -r .hookSpecificOutput.permissionDecision)" = "deny" ]
+  [[ "$(echo "$out" | jq -r .hookSpecificOutput.permissionDecisionReason)" == *"task_brainstorm"* ]]
+  [[ "$(echo "$out" | jq -r .hookSpecificOutput.permissionDecisionReason)" == *"INTERACTIVE"* ]]
+  [[ "$(echo "$out" | jq -r .hookSpecificOutput.permissionDecisionReason)" == *"AskUserQuestion"* ]]
+}
+
+@test "interactive stage: Agent with atelier:* description is DENIED even if subagent_type differs" {
+  ps_update "$TMP" "$PID" '.expectedMode = "interactive" | .currentStage = "brainstorm"'
+  out="$(drive "{\"tool_name\":\"Agent\",\"cwd\":\"$TMP\",\"session_id\":\"sess-t\",\"tool_input\":{\"subagent_type\":\"general-purpose\",\"description\":\"atelier:brainstorm\",\"prompt\":\"x\"}}")"
+  [ "$(echo "$out" | jq -r .hookSpecificOutput.permissionDecision)" = "deny" ]
+}
+
+@test "interactive stage: unrelated helper subagent passes through (not over-restricted)" {
+  ps_update "$TMP" "$PID" '.expectedMode = "interactive" | .currentStage = "brainstorm"'
+  out="$(drive "{\"tool_name\":\"Agent\",\"cwd\":\"$TMP\",\"session_id\":\"sess-t\",\"tool_input\":{\"subagent_type\":\"general-purpose\",\"description\":\"research auth libraries\",\"prompt\":\"survey\"}}")"
   [ -z "$out" ]
 }
 

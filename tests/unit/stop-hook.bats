@@ -110,6 +110,18 @@ drive_stop() {
   [ "$(jq -r .currentStage ".atelier/pipelines/$PID/pipeline-state.json")" = "brainstorm" ]
 }
 
+@test "interactive dispatch reason forbids subagent delegation (run-it-yourself)" {
+  result="$(drive_stop "{\"cwd\":\"$TMP\",\"session_id\":\"sess-t\"}")"
+  reason="$(echo "$result" | jq -r .reason)"
+  [[ "$reason" == *"Run this stage YOURSELF"* ]]
+  [[ "$reason" == *"do NOT call the Agent tool"* ]]
+  [[ "$reason" == *"SendMessage"* ]]
+  [[ "$reason" == *"AskUserQuestion"* ]]
+  # Still carries the methodology + signaling contract.
+  [[ "$reason" == *"Body of brainstorming-feature"* ]]
+  [[ "$reason" == *"atelier_signal"* ]]
+}
+
 @test "verdict=done advances to next stage (autonomous)" {
   ps_update "$TMP" "$PID" '.currentStage = "brainstorm" | .lastVerdict = "done" |
     .stages = [{id:"b1",stage:"brainstorm",status:"completed"}]'
