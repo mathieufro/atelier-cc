@@ -64,6 +64,25 @@ drive_post() { printf '%s' "$1" | "$ATELIER_CC_ROOT/hooks/posttooluse-signal.sh"
   [ "$(jq -r .currentStage ".atelier/pipelines/$PID/pipeline-state.json")" = "review_spec" ]
 }
 
+@test "signal from INSIDE a subagent (agent_id present): hard no-op even for interactive expectedMode" {
+  # Regression: PostToolUse fires for subagent-internal tool calls too, with
+  # the parent session_id. Brainstorm-family interactive stages run via a
+  # stage-worker subagent (expectedMode stays "interactive"). If this hook
+  # acted, it would inject "Call the Agent tool ..." INTO the subagent and
+  # wedge the pipeline. agent_id present => subagent => must do nothing.
+  ps_update "$TMP" "$PID" '.currentStage = "brainstorm" | .expectedMode = "interactive" |
+    .lastVerdict = "done" |
+    .stages = [{id:"b1",stage:"brainstorm",status:"completed",verdict:"done"}]'
+  sub_payload="$(jq -nc --arg cwd "$TMP" \
+    '{cwd:$cwd, session_id:"sess-t", agent_id:"sub-abc123", agent_type:"atelier:atelier-stage-worker",
+      tool_name:"mcp__atelier__atelier_signal",
+      tool_response:{content:[{type:"text",text:"Stage signal received. End your turn NOW."}]}}')"
+  result="$(drive_post "$sub_payload")"
+  [ -z "$result" ]
+  [ "$(jq -r .currentStage ".atelier/pipelines/$PID/pipeline-state.json")" = "brainstorm" ]
+  [ "$(jq -r '.stages | length' ".atelier/pipelines/$PID/pipeline-state.json")" = "1" ]
+}
+
 @test "autonomous stage signal: no-op (SubagentStop owns that boundary; avoids double-dispatch)" {
   ps_update "$TMP" "$PID" '.currentStage = "implement" | .expectedMode = "autonomous" |
     .lastVerdict = "done" |

@@ -29,6 +29,23 @@ input="$(cat)"
 # existing mid-flight / ghost-recovery guard stays as the secondary net (it
 # no-ops once this hook has appended the next running row).
 
+# NEVER act on a signal made from inside a subagent. PostToolUse fires for
+# subagent-internal tool calls too, carrying the PARENT session_id (so
+# find_owned_pipeline would still match) but with `agent_id` set. If we ran
+# dispatch_apply here we would (a) prematurely advance state from inside the
+# subagent and (b) emit a {decision:block,reason:"Call the Agent tool ..."}
+# that Claude Code injects INTO THE SUBAGENT — a stage worker that is told
+# never to call Agent. It then gets contradictory directives ("end your turn"
+# from the MCP result + "call Agent" from us), never ends its turn, the Agent
+# tool never returns to main, SubagentStop never fires, and the pipeline
+# wedges. Subagent completion is owned by SubagentStop (autonomous stages) or
+# the main agent's Stop after the Agent tool returns (interactive stages run
+# via a stage-worker subagent — brainstorm family). This hook exists ONLY for
+# the genuine main-agent interactive signal (classify, quick_plan, plan_gate),
+# where there is no subagent and Stop is the sole — unreliable — fallback.
+agent_id="$(printf '%s' "$input" | jq -r '.agent_id // empty')"
+[ -n "$agent_id" ] && exit 0
+
 # Act only on a SUCCESSFUL atelier_signal. Every MCP error path (pipeline not
 # found, lock failure, missing artifact, worktree failure) returns text that
 # does NOT contain this phrase; the success payload always does. Dispatching
