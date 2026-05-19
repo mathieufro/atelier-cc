@@ -26,6 +26,19 @@ for sp in "$pdir"/*/pipeline-state.json; do
   # is stale (>120s). Preserves actively-running pipelines owned by parallel
   # sessions. Stuck pipelines stay stuck — set deliberately by routing.
   if [ "$status" = "running" ]; then
+    # NEVER heartbeat-demote an interactive stage that is in flight. Interactive
+    # stages (brainstorm/plan/etc.) are USER-paced: the agent asks a question
+    # and waits — possibly many minutes — with no ps_update, so a "stale"
+    # heartbeat is normal, NOT a crash. Demoting it to idle here is a false
+    # positive that then makes the post-signal Stop/PostToolUse hooks no-op on
+    # `idle` and the pipeline silently fails to advance after the spec is
+    # written. Autonomous stages still demote (a stale heartbeat there is a
+    # real crash signal).
+    em="$(jq -r '.expectedMode // empty' "$sp" 2>/dev/null)"
+    lrs="$(jq -r '(.stages // []) | (last // {}) | .status // ""' "$sp" 2>/dev/null)"
+    if [ "$em" = "interactive" ] && [ "$lrs" = "running" ]; then
+      continue
+    fi
     hb="$(jq -r '.lastHeartbeatMs // .createdAt // 0' "$sp")"
     age=$((now_ms - hb))
     if [ "$age" -ge "$HB_STALE_MS" ]; then

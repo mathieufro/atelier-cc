@@ -70,6 +70,9 @@ sp="$(ps_path "$wsp" "$pid")"
 [ -f "$sp" ] || exit 0
 state="$(cat "$sp")"
 status="$(printf '%s' "$state" | jq -r .status)"
+# (A completion signal re-arms a stale `idle` → `running` upstream in the MCP
+# atelier_signal handler — the single authoritative point — so by the time
+# this hook fires the status is already correct. Nothing to do here.)
 case "$status" in
   completed|idle|stuck) exit 0 ;;
 esac

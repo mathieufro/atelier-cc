@@ -69,6 +69,47 @@ describe("atelier_signal tool", () => {
     expect(typeof state.stages[0].completedAt).toBe("number")
   })
 
+  it("completion signal re-arms a stale `idle` pipeline to `running` (heartbeat false-demotion recovery)", async () => {
+    // SessionStart's crash-recovery wrongly demoted an actively-conversing
+    // interactive stage to idle; the completion signal must supersede it so
+    // the routing hooks (which no-op on non-running) advance the pipeline.
+    let s = JSON.parse(fs.readFileSync(statePath, "utf8"))
+    s.status = "idle"
+    fs.writeFileSync(statePath, JSON.stringify(s))
+    await client.callTool({
+      name: "atelier_signal",
+      arguments: { type: "stage_complete", pipelineId: pid, verdict: "done" },
+    })
+    const state = JSON.parse(fs.readFileSync(statePath, "utf8"))
+    expect(state.status).toBe("running")
+    expect(state.lastVerdict).toBe("done")
+    expect(state.stages[0].status).toBe("completed")
+  })
+
+  it("a non-completion (classify) signal does NOT resurrect an idle pipeline", async () => {
+    let s = JSON.parse(fs.readFileSync(statePath, "utf8"))
+    s.status = "idle"; s.currentStage = null
+    fs.writeFileSync(statePath, JSON.stringify(s))
+    await client.callTool({
+      name: "atelier_signal",
+      arguments: { type: "stage_complete", pipelineId: pid, pipelineType: "feature", worktreeChoice: "in-tree" },
+    })
+    const state = JSON.parse(fs.readFileSync(statePath, "utf8"))
+    expect(state.status).toBe("idle")
+  })
+
+  it("a `stuck` pipeline is NOT resurrected by a signal (escalation must reach the human)", async () => {
+    let s = JSON.parse(fs.readFileSync(statePath, "utf8"))
+    s.status = "stuck"
+    fs.writeFileSync(statePath, JSON.stringify(s))
+    await client.callTool({
+      name: "atelier_signal",
+      arguments: { type: "stage_complete", pipelineId: pid, verdict: "done" },
+    })
+    const state = JSON.parse(fs.readFileSync(statePath, "utf8"))
+    expect(state.status).toBe("stuck")
+  })
+
   it("partial verdict sets stage status to idle", async () => {
     const progress = path.join(wsp, ".atelier", "pipelines", pid, "progress.md")
     fs.writeFileSync(progress, "# Progress")

@@ -23,6 +23,26 @@ drive() { printf '%s' "$1" | "$ATELIER_CC_ROOT/hooks/session-start.sh"; }
   [ "$(jq -r '.stages[0].status' ".atelier/pipelines/$PID/pipeline-state.json")" = "idle" ]
 }
 
+@test "INTERACTIVE in-flight stage with stale heartbeat is NOT demoted (user-paced, not a crash)" {
+  stale=$(( $(epoch_ms) - 300000 ))
+  ps_update "$TMP" "$PID" ".expectedMode = \"interactive\" |
+    .stages = [{id:\"b1\",stage:\"brainstorm\",status:\"running\",startedAt:0}] |
+    .lastHeartbeatMs = $stale"
+  drive "{\"cwd\":\"$TMP\"}" >/dev/null
+  state="$(cat ".atelier/pipelines/$PID/pipeline-state.json")"
+  [ "$(echo "$state" | jq -r .status)" = "running" ]
+  [ "$(echo "$state" | jq -r '.stages[-1].status')" = "running" ]
+}
+
+@test "autonomous in-flight stage with stale heartbeat IS still demoted (real crash signal)" {
+  stale=$(( $(epoch_ms) - 300000 ))
+  ps_update "$TMP" "$PID" ".expectedMode = \"autonomous\" |
+    .stages = [{id:\"i1\",stage:\"implement\",status:\"running\",startedAt:0}] |
+    .lastHeartbeatMs = $stale"
+  drive "{\"cwd\":\"$TMP\"}" >/dev/null
+  [ "$(jq -r .status ".atelier/pipelines/$PID/pipeline-state.json")" = "idle" ]
+}
+
 @test "idle pipeline surfaces additionalContext" {
   ps_update "$TMP" "$PID" '.status = "idle"'
   out="$(drive "{\"cwd\":\"$TMP\"}")"

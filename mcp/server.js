@@ -169,6 +169,17 @@ server.registerTool(
           return { content: [{ type: "text", text: "Stage signal received, but this stage is already complete — duplicate/stale signal ignored (the orchestrator has already advanced). End your turn now; do not signal again." }] }
         }
 
+        // A completion signal is AUTHORITATIVE proof the pipeline is alive. If
+        // SessionStart's heartbeat crash-recovery demoted it to `idle` while an
+        // interactive stage was mid-conversation (a false positive — an
+        // interactive stage is user-paced and doesn't heartbeat), that idle is
+        // stale the instant a real signal arrives. Re-arm `running` here, the
+        // single authoritative point, so the Stop/PostToolUse routing hooks
+        // (which no-op on a non-running pipeline) advance instead of silently
+        // dropping the completed stage. `completed` (pipeline truly done) and
+        // `stuck` (escalated — needs the human) are deliberately NOT resurrected.
+        if (state.status === "idle") state.status = "running"
+
         if (args.verdict !== undefined) state.lastVerdict = args.verdict
         if (args.outputPath !== undefined) state.lastOutputPath = args.outputPath
         if (args.action !== undefined) state.lastAction = args.action

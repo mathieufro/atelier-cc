@@ -24,6 +24,10 @@ sp="$(ps_path "$wsp" "$pid")"
 [ -f "$sp" ] || exit 0
 state="$(cat "$sp")"
 status="$(printf '%s' "$state" | jq -r .status)"
+# (A stale `idle` from heartbeat false-demotion is re-armed to `running` by the
+# MCP atelier_signal handler when the completion is recorded — see mcp/server.js
+# — so Stop sees the correct status. session-start.sh also no longer demotes an
+# interactive in-flight stage in the first place.)
 case "$status" in
   completed|idle|stuck) exit 0 ;;
 esac

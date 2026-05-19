@@ -64,6 +64,7 @@ drive_post() { printf '%s' "$1" | "$ATELIER_CC_ROOT/hooks/posttooluse-signal.sh"
   [ "$(jq -r .currentStage ".atelier/pipelines/$PID/pipeline-state.json")" = "review_spec" ]
 }
 
+
 @test "signal from INSIDE a subagent (agent_id present): hard no-op even for interactive expectedMode" {
   # Regression: PostToolUse fires for subagent-internal tool calls too, with
   # the parent session_id. Brainstorm-family interactive stages run via a
