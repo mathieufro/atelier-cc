@@ -84,6 +84,27 @@ teardown() { rm -rf "$TMP"; }
   [ "$(echo "$decision" | jq -r .stage.name)" = "implement" ]
 }
 
+@test "resume.sh on a FORWARD-completed parked stage PRESERVES the verdict and advances (no re-run — the erae brainstorm disaster)" {
+  source "$ATELIER_CC_ROOT/lib/topology.sh"
+  source "$ATELIER_CC_ROOT/lib/routing.sh"
+  TOPO='{"name":"feature","stages":[{"name":"brainstorm","mode":"interactive","skill":"brainstorming-feature","requiresArtifact":true},{"name":"review_spec","mode":"autonomous","skill":"reviewing-specs","reviewBehavior":"fixing-specs"}]}'
+  ps_update "$TMP" "$PID" \
+    '.type = "feature" | .currentStage = "brainstorm" | .lastVerdict = "done" |
+     .lastOutputPath = "/x/spec.md" |
+     .stages = [{"id":"c1","stage":"compile_brainstorm","status":"completed","verdict":"done"},
+                {"id":"b1","stage":"brainstorm","status":"completed","verdict":"done","outputPath":"/x/spec.md"}]'
+  CLAUDE_CODE_SESSION_ID="sess-resumer" "$ATELIER_CC_ROOT/scripts/resume.sh" "$PID"
+  state="$(cat ".atelier/pipelines/$PID/pipeline-state.json")"
+  # Verdict PRESERVED (not nulled) so routing advances; brainstorm row untouched.
+  [ "$(echo "$state" | jq -r .status)" = "running" ]
+  [ "$(echo "$state" | jq -r .lastVerdict)" = "done" ]
+  [ "$(echo "$state" | jq -r '.stages[-1].stage')" = "brainstorm" ]
+  [ "$(echo "$state" | jq -r '.stages[-1].status')" = "completed" ]
+  decision="$(routing_decide "$state" "$TOPO")"
+  [ "$(echo "$decision" | jq -r .kind)" = "dispatch" ]
+  [ "$(echo "$decision" | jq -r .stage.name)" = "review_spec" ]
+}
+
 @test "resume.sh leaves completed and idle stage rows untouched" {
   ps_update "$TMP" "$PID" \
     '.stages = [
