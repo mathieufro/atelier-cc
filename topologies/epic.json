@@ -5,7 +5,7 @@
     { "name": "compile_brainstorm", "mode": "autonomous", "skill": "compiling-brainstorm", "artifactType": "compiled-brainstorm" },
     { "name": "brainstorm", "mode": "interactive", "skill": "brainstorming-epic", "artifactType": "spec", "requiresArtifact": true },
     { "name": "review_spec", "mode": "autonomous", "skill": "reviewing-specs", "reviewBehavior": "fixing-specs", "artifactType": "spec-review", "requiresArtifact": true },
-    { "name": "establish_conventions", "mode": "autonomous", "skill": "establishing-conventions", "artifactType": "conventions", "requiresArtifact": true },
+    { "name": "establish_conventions", "mode": "autonomous", "skill": "establishing-conventions", "artifactType": "conventions" },
     { "name": "compile_roadmap_brainstorm", "mode": "autonomous", "skill": "compiling-brainstorm", "artifactType": "compiled-roadmap-brainstorm" },
     { "name": "brainstorm_roadmap", "mode": "interactive", "skill": "brainstorming-roadmap", "artifactType": "roadmap", "requiresArtifact": true },
     { "name": "review_roadmap", "mode": "autonomous", "skill": "reviewing-roadmaps", "reviewBehavior": "fixing", "artifactType": "roadmap-review", "requiresArtifact": true },
