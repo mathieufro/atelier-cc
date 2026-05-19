@@ -7,7 +7,8 @@
       { "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/subagent-stop.sh" }] }
     ],
     "PreToolUse": [
-      { "matcher": "Agent", "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pretooluse-agent.sh" }] }
+      { "matcher": "Agent", "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pretooluse-agent.sh" }] },
+      { "matcher": "Skill", "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pretooluse-skill.sh" }] }
     ],
     "PostToolUse": [
       { "matcher": "mcp__.*atelier_signal", "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/posttooluse-signal.sh" }] }
