@@ -15,10 +15,11 @@ You describe what you want. Atelier takes it through brainstorming, spec, planni
 ## Install
 
 ```
-/plugin install https://github.com/mathieufro/atelier-cc.git
+/plugin marketplace add mathieufro/atelier-cc
+/plugin install atelier@atelier
 ```
 
-This pulls the whole plugin in one go — all 29 skills, slash commands, agents, hooks, and the bundled MCP server. After install, `/atelier` is available as a slash command.
+The first command registers this repo as a Claude Code plugin marketplace; the second installs the `atelier` plugin from it. One install pulls the whole thing — all 29 skills, slash commands, agents, hooks, and the bundled MCP server. After install, `/atelier` is available as a slash command.
 
 ## Quick start
 
