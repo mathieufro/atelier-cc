@@ -15,10 +15,10 @@ You describe what you want. Atelier takes it through brainstorming, spec, planni
 ## Install
 
 ```
-/plugin install <git-url-of-atelier-cc>
+/plugin install https://github.com/mathieufro/atelier-cc.git
 ```
 
-After install, `/atelier` is available as a slash command.
+This pulls the whole plugin in one go — all 29 skills, slash commands, agents, hooks, and the bundled MCP server. After install, `/atelier` is available as a slash command.
 
 ## Quick start
 
