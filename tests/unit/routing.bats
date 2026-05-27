@@ -139,8 +139,8 @@ PLAN_TOPOLOGY='{
   [ "$(echo "$result" | jq -r .isFixStage)" = "false" ]
 }
 
-@test "verdict=partial at retry cap (5) pauses" {
-  state='{"currentStage":"implement","lastVerdict":"partial","fixAttempts":{"implement":5},"stages":[{"id":"i1","stage":"implement","status":"idle"}]}'
+@test "verdict=partial at retry cap (15) pauses" {
+  state='{"currentStage":"implement","lastVerdict":"partial","fixAttempts":{"implement":15},"stages":[{"id":"i1","stage":"implement","status":"idle"}]}'
   result="$(routing_decide "$state" "$TOPOLOGY")"
   [ "$(echo "$result" | jq -r .kind)" = "pause" ]
   [[ "$(echo "$result" | jq -r .error)" == *"partial retry cap"* ]]

@@ -3,7 +3,12 @@
 # No side effects. The Stop hook applies the returned decision via ps_update.
 
 readonly ROUTING_FIX_ATTEMPT_CAP=5
-readonly ROUTING_PARTIAL_CAP=5
+# Partials are "more work to do," not "stuck" — a 44-task implement at ~4-7
+# tasks/cycle legitimately needs 8-12 partial dispatches. 5 was a hair-trigger
+# that parked any non-trivial implementation. resume.sh additionally resets
+# fixAttempts.<currentStage> on the retry branch so an explicit user-driven
+# resume always gets a fresh budget regardless of this cap.
+readonly ROUTING_PARTIAL_CAP=15
 
 routing_decide() {
   local state="$1" topo="$2"

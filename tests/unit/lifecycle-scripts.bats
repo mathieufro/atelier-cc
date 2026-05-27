@@ -105,6 +105,36 @@ teardown() { rm -rf "$TMP"; }
   [ "$(echo "$decision" | jq -r .stage.name)" = "review_spec" ]
 }
 
+@test "resume.sh in retry branch resets fixAttempts for currentStage (unwedges partial-cap loop)" {
+  # Without this reset a long implement that hits ROUTING_PARTIAL_CAP parks idle,
+  # and every subsequent /atelier resume runs ONE more cycle before routing
+  # immediately re-paused on "partial retry cap exceeded" — an infinite resume
+  # loop. Explicit user resume IS the human-in-the-loop check the cap exists for,
+  # so the budget resets here. Other stages' counters are preserved.
+  ps_update "$TMP" "$PID" \
+    '.currentStage = "implement" | .lastVerdict = "partial" |
+     .fixAttempts = {"implement": 15, "review_spec": 2} |
+     .stages = [{"id":"s1","stage":"implement","status":"idle","verdict":"partial"}]'
+  CLAUDE_CODE_SESSION_ID="sess-resumer" "$ATELIER_CC_ROOT/scripts/resume.sh" "$PID"
+  state="$(cat ".atelier/pipelines/$PID/pipeline-state.json")"
+  [ "$(echo "$state" | jq -r '.fixAttempts.implement')" = "0" ]
+  [ "$(echo "$state" | jq -r '.fixAttempts.review_spec')" = "2" ]
+}
+
+@test "resume.sh on FORWARD-completed stage does NOT touch fixAttempts (next stage gets its own counter)" {
+  # The forward-completed branch advances to the next stage. Resetting counters
+  # there is meaningless (next stage's counter is unset / 0 already) and would
+  # mask a genuine multi-stage retry pattern.
+  source "$ATELIER_CC_ROOT/lib/topology.sh"
+  ps_update "$TMP" "$PID" \
+    '.type = "feature" | .currentStage = "brainstorm" | .lastVerdict = "done" |
+     .fixAttempts = {"implement": 3} |
+     .stages = [{"id":"b1","stage":"brainstorm","status":"completed","verdict":"done"}]'
+  CLAUDE_CODE_SESSION_ID="sess-resumer" "$ATELIER_CC_ROOT/scripts/resume.sh" "$PID"
+  state="$(cat ".atelier/pipelines/$PID/pipeline-state.json")"
+  [ "$(echo "$state" | jq -r '.fixAttempts.implement')" = "3" ]
+}
+
 @test "resume.sh leaves completed and idle stage rows untouched" {
   ps_update "$TMP" "$PID" \
     '.stages = [

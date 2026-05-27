@@ -53,10 +53,16 @@ if [ "$advance" = "yes" ]; then
     --arg sid "$CLAUDE_CODE_SESSION_ID"
 else
   # Incomplete / escalated → retry: clear stale terminal signals so routing's
-  # null-verdict branch re-dispatches currentStage.
+  # null-verdict branch re-dispatches currentStage. Also reset
+  # fixAttempts.<currentStage> — partial/has_issues attempts accumulate across
+  # cycles, and an explicit user resume IS the human-in-the-loop sanity check
+  # the cap exists to ask for. Without this reset a stage that already hit the
+  # cap re-pauses on its very next partial after resume (the user signals
+  # "continue," routing replies "cap exceeded" → infinite resume loop).
   ps_update "$wsp" "$pid" \
     '.status = "running" | .error = null | .sourceSessionId = $sid |
      .lastVerdict = null | .lastAction = null | .lastOutcome = null |
+     (if (.currentStage // null) != null and ((.fixAttempts // {})[.currentStage] // 0) > 0 then .fixAttempts[.currentStage] = 0 else . end) |
      .stages |= map(if (.status == "running" or .status == "stuck") then . + {status:"idle", interrupted:true} else . end)' \
     --arg sid "$CLAUDE_CODE_SESSION_ID"
 fi
