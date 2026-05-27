@@ -37,21 +37,35 @@ teardown() { rm -rf "$TMP"; }
   [ -z "$(find_owned_pipeline "$TMP" sess-ghost)" ]
 }
 
-@test "find_owned_pipeline adopts the single running pipeline when sourceSessionId mismatches (deterministic fallback)" {
+@test "find_owned_pipeline fallback adopts an UNOWNED single running pipeline (from-specs / new window)" {
   export CLAUDE_CODE_SESSION_ID="sess-A"
   PID="$("$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'a')"
-  ps_update "$TMP" "$PID" '.status = "running"'
-  # A different session (from-specs / new window / cwd-diverged) must still
-  # resolve the one running pipeline in this workspace.
+  # Simulate the legitimate fallback case: state was reset / migrated and
+  # sourceSessionId is empty. ANY session may adopt the single running one.
+  ps_update "$TMP" "$PID" '.status = "running" | .sourceSessionId = null'
   [ "$(find_owned_pipeline "$TMP" sess-DIFFERENT)" = "$PID" ]
 }
 
-@test "find_owned_pipeline fallback is ambiguous-safe: >1 running and no owner match → empty" {
+@test "find_owned_pipeline fallback REFUSES a pipeline owned by another live session (cross-session firewall)" {
+  # Regression: with two parallel CC sessions each driving a pipeline in the
+  # same workspace, when this session's pipeline ends (status != running), the
+  # primary loop finds 0. The old "single running" fallback then stole the
+  # OTHER session's pipeline and dispatched its next stage from this main agent.
+  # Fix: never adopt when sourceSessionId is set to a non-matching value.
+  export CLAUDE_CODE_SESSION_ID="sess-A"
+  PID_A="$("$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'a')"
+  ps_set_status "$TMP" "$PID_A" "completed"            # A's pipeline finished
+  PID_B="$(CLAUDE_CODE_SESSION_ID=sess-B "$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'b')"
+  # B's pipeline is the only running one in the workspace — A must NOT adopt it.
+  [ -z "$(find_owned_pipeline "$TMP" sess-A)" ]
+}
+
+@test "find_owned_pipeline fallback is ambiguous-safe: >1 unowned running → empty" {
   export CLAUDE_CODE_SESSION_ID="sess-A"
   PID_A="$("$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'a')"
   PID_B="$(CLAUDE_CODE_SESSION_ID=sess-B "$ATELIER_CC_ROOT/scripts/start-pipeline.sh" 'b')"
-  ps_update "$TMP" "$PID_A" '.status = "running"'
-  ps_update "$TMP" "$PID_B" '.status = "running"'
+  ps_update "$TMP" "$PID_A" '.status = "running" | .sourceSessionId = null'
+  ps_update "$TMP" "$PID_B" '.status = "running" | .sourceSessionId = null'
   [ -z "$(find_owned_pipeline "$TMP" sess-NEITHER)" ]
 }
 

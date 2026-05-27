@@ -138,21 +138,32 @@ find_owned_pipeline() {
   done
   local n="${#matches[@]}"
   if [ "$n" -eq 0 ]; then
-    # Ownership fallback. sourceSessionId wasn't stamped for this session —
+    # Ownership fallback. sourceSessionId didn't match for this session —
     # pipeline started "from specs"/attach, continued in a new CC window, cwd
-    # diverged, or a Google-Drive path. The documented contract is one pipeline
-    # per workspace/session, so if EXACTLY ONE pipeline in this workspace is
-    # `running`, it is unambiguously the one this session is driving — adopt it.
-    # (Zero or >1 running → ambiguous → return empty, unchanged behavior.) This
-    # makes resolution deterministic instead of dependent on a brittle
-    # sourceSessionId equality that silently fails into a re-dispatch loop.
-    local running=()
+    # diverged, or a Google-Drive path. If EXACTLY ONE running pipeline in this
+    # workspace is UNOWNED (sourceSessionId empty/null), it is unambiguously the
+    # one this session is driving — adopt it.
+    #
+    # CRITICAL: never adopt a pipeline owned by a different non-empty session,
+    # even if it's the only running one. With two parallel CC sessions each
+    # driving their own pipeline in the same workspace, this session's pipeline
+    # transitions to non-running (completes a stage, terminates) — primary loop
+    # finds 0, and a naive "only running one" fallback then steals the OTHER
+    # session's pipeline and dispatches its next stage from inside this main
+    # agent. (Symptom: "a stage from pipeline 1 launched in pipeline 2's
+    # session.") Requiring sourceSessionId empty to adopt is the deterministic
+    # cross-session firewall — the "continued in a new CC window" recovery still
+    # works via `/atelier resume` (re-stamps sourceSessionId explicitly).
+    local unowned=()
     for sp in "$pdir"/*/pipeline-state.json; do
       [ -f "$sp" ] || continue
       [ "$(jq -r '.status // empty' "$sp" 2>/dev/null)" = "running" ] || continue
-      running+=("$(jq -r .id "$sp" 2>/dev/null)")
+      local sid_owner
+      sid_owner="$(jq -r '.sourceSessionId // empty' "$sp" 2>/dev/null)"
+      [ -z "$sid_owner" ] || continue
+      unowned+=("$(jq -r .id "$sp" 2>/dev/null)")
     done
-    [ "${#running[@]}" -eq 1 ] && printf '%s\n' "${running[0]}"
+    [ "${#unowned[@]}" -eq 1 ] && printf '%s\n' "${unowned[0]}"
     return 0
   fi
   if [ "$n" -gt 1 ]; then

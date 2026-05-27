@@ -37,14 +37,22 @@ drive() {
   [ -z "$out" ]
 }
 
-@test "non-owner session, single running pipeline, genuine dispatch: ownership fallback RESOLVES and rewrites (no sentinel passthrough, no deny-loop)" {
-  # sess-Other doesn't own it, but exactly one pipeline is running in TMP →
-  # deterministic fallback adopts it; a real atelier dispatch must be compiled,
-  # never silently pass the literal sentinel to a subagent.
+@test "non-owner session, single UNOWNED running pipeline, genuine dispatch: ownership fallback RESOLVES and rewrites (no sentinel passthrough, no deny-loop)" {
+  # Fallback now requires sourceSessionId to be empty (cross-session firewall).
+  # Strip ownership to exercise the legitimate from-specs/new-window adoption.
+  ps_update "$TMP" "$PID" '.sourceSessionId = null'
   out="$(drive "{\"tool_name\":\"Agent\",\"cwd\":\"$TMP\",\"session_id\":\"sess-Other\",\"tool_input\":{\"subagent_type\":\"atelier:atelier-stage-worker\",\"description\":\"atelier:write_plan\",\"prompt\":\"<MARKER:next-stage>\"}}")"
   [ "$(echo "$out" | jq -r .hookSpecificOutput.permissionDecision)" = "allow" ]
   [ "$(echo "$out" | jq -r .hookSpecificOutput.updatedInput.subagent_type)" = "atelier:atelier-stage-worker" ]
   [[ "$(echo "$out" | jq -r .hookSpecificOutput.updatedInput.prompt)" != *"<MARKER:next-stage>"* ]]
+}
+
+@test "cross-session: non-owner Agent dispatch is NOT hijacked into another session's pipeline (firewall)" {
+  # PID is owned by sess-t. A dispatch attempt from sess-Other must NOT pull
+  # in sess-t's pipeline — even though it's the only running one in the workspace.
+  # The hook should pass through silently (no rewrite, no deny).
+  out="$(drive "{\"tool_name\":\"Agent\",\"cwd\":\"$TMP\",\"session_id\":\"sess-Other\",\"tool_input\":{\"subagent_type\":\"atelier:atelier-stage-worker\",\"description\":\"atelier:write_plan\",\"prompt\":\"<MARKER:next-stage>\"}}")"
+  [ -z "$out" ]
 }
 
 @test "non-owner session helper subagent (not a dispatch) is NEVER hijacked, even with a running pipeline" {

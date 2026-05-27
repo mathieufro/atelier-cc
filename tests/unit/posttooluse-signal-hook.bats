@@ -125,13 +125,31 @@ drive_post() { printf '%s' "$1" | "$ATELIER_CC_ROOT/hooks/posttooluse-signal.sh"
   [ -z "$result" ]
 }
 
-@test "non-owner main-agent signal, single running pipeline: fallback adopts and advances (deterministic ownership)" {
-  ps_update "$TMP" "$PID" '.status = "running" | .currentStage = "brainstorm" | .expectedMode = "interactive" | .lastVerdict = "done" | .stages = [{id:"b1",stage:"brainstorm",status:"completed",verdict:"done"}]'
+@test "non-owner main-agent signal, single UNOWNED running pipeline: fallback adopts and advances (deterministic ownership)" {
+  # Fallback requires sourceSessionId to be empty — an owned pipeline is off-limits
+  # even from a non-owning session (cross-session firewall).
+  ps_update "$TMP" "$PID" '.status = "running" | .sourceSessionId = null |
+    .currentStage = "brainstorm" | .expectedMode = "interactive" | .lastVerdict = "done" |
+    .stages = [{id:"b1",stage:"brainstorm",status:"completed",verdict:"done"}]'
   foreign="$(jq -nc --arg cwd "$TMP" \
     '{cwd:$cwd, session_id:"sess-Other", tool_name:"mcp__atelier__atelier_signal",
       tool_response:{content:[{type:"text",text:"Stage signal received."}]}}')"
   result="$(drive_post "$foreign")"
   [ "$(echo "$result" | jq -r .decision)" = "block" ]
+}
+
+@test "cross-session: non-owner signal does NOT adopt a pipeline owned by a live different session (firewall)" {
+  # Regression for "a stage from pipeline 1 launched in pipeline 2's session":
+  # PID is owned by sess-t. A signal from sess-Other must NOT be adopted — even
+  # though it's the only running pipeline in the workspace.
+  ps_update "$TMP" "$PID" '.status = "running" | .currentStage = "brainstorm" |
+    .expectedMode = "interactive" | .lastVerdict = "done" |
+    .stages = [{id:"b1",stage:"brainstorm",status:"completed",verdict:"done"}]'
+  foreign="$(jq -nc --arg cwd "$TMP" \
+    '{cwd:$cwd, session_id:"sess-Other", tool_name:"mcp__atelier__atelier_signal",
+      tool_response:{content:[{type:"text",text:"Stage signal received."}]}}')"
+  result="$(drive_post "$foreign")"
+  [ -z "$result" ]
 }
 
 @test "terminal pipeline status (completed): no-op" {

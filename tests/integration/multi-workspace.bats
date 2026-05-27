@@ -18,12 +18,13 @@ teardown() { rm -rf "$WSP_A" "$WSP_B"; }
   [ -d "$WSP_B/.atelier/pipelines/$PID_B" ] && [ ! -d "$WSP_B/.atelier/pipelines/$PID_A" ]
   [ "$(find_owned_pipeline "$WSP_A" sess-A)" = "$PID_A" ]
   [ "$(find_owned_pipeline "$WSP_B" sess-B)" = "$PID_B" ]
-  # Ownership resolution is WORKSPACE-SCOPED. A cross-session query resolves the
-  # *querying workspace's* single running pipeline via the deterministic
-  # fallback — and NEVER the other workspace's. No-cross-workspace-leak is the
-  # isolation guarantee that matters, not strict per-session ownership.
-  [ "$(find_owned_pipeline "$WSP_A" sess-B)" = "$PID_A" ]
-  [ "$(find_owned_pipeline "$WSP_B" sess-A)" = "$PID_B" ]
+  # Cross-workspace queries never leak (the strong isolation guarantee).
   [ "$(find_owned_pipeline "$WSP_A" sess-B)" != "$PID_B" ]
   [ "$(find_owned_pipeline "$WSP_B" sess-A)" != "$PID_A" ]
+  # Cross-session query within the SAME workspace must NOT adopt a pipeline
+  # owned by a live different session — even though it's the only running one
+  # in that workspace. (Cross-session firewall: regression for the case where
+  # one session's stage got dispatched in another session's main agent.)
+  [ -z "$(find_owned_pipeline "$WSP_A" sess-B)" ]
+  [ -z "$(find_owned_pipeline "$WSP_B" sess-A)" ]
 }

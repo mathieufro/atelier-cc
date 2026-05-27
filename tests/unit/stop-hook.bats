@@ -97,9 +97,19 @@ drive_stop() {
   [ -z "$result" ]
 }
 
-@test "foreign session, single running pipeline: fallback adopts and routes (deterministic ownership)" {
+@test "foreign session, single UNOWNED running pipeline: fallback adopts and routes (deterministic ownership)" {
+  # Fallback now requires sourceSessionId to be empty (cross-session firewall).
+  ps_update "$TMP" "$PID" '.sourceSessionId = null'
   result="$(drive_stop "{\"cwd\":\"$TMP\",\"session_id\":\"sess-Other\"}")"
   [ "$(echo "$result" | jq -r .decision)" = "block" ]
+}
+
+@test "cross-session firewall: foreign Stop does NOT route into a pipeline owned by a live different session" {
+  # PID is owned by sess-t. A Stop fired by sess-Other must NOT route — even
+  # though it's the only running pipeline in the workspace. (Regression for
+  # "a stage from pipeline 1 was launched in pipeline 2 session".)
+  result="$(drive_stop "{\"cwd\":\"$TMP\",\"session_id\":\"sess-Other\"}")"
+  [ -z "$result" ]
 }
 
 @test "awaiting classify (type=null): exits with no decision, does not dispatch" {
