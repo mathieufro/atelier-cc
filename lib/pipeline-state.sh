@@ -53,7 +53,13 @@ ps_update() {
   # updatedAt + lastHeartbeatMs are pre-set to $now, then the caller's filter
   # runs — so an ordinary update auto-bumps the heartbeat, but a test (or
   # crash-recovery simulation) that explicitly assigns .lastHeartbeatMs wins.
-  if ! jq "$@" "(.updatedAt = $now | .lastHeartbeatMs = $now) | $filter" "$sp" > "$tmp"; then
+  # MSYS2_ARG_CONV_EXCL='*' + stdin redirect: on git-bash for Windows, MSYS
+  # auto-converts unix-style paths in --arg values (e.g. /tmp/foo → C:/.../foo),
+  # silently mangling round-tripped path strings. Disabling for all args is safe
+  # here only because the input file is fed via stdin (no positional path arg
+  # for MSYS to mis-translate).
+  if ! MSYS2_ARG_CONV_EXCL='*' MSYS_NO_PATHCONV=1 \
+       jq "$@" "(.updatedAt = $now | .lastHeartbeatMs = $now) | $filter" < "$sp" > "$tmp"; then
     rm -f "$tmp"
     ps_lock_release "$sp"
     die "jq update failed"
@@ -78,7 +84,10 @@ ps_init() {
     type_jq="$(jq -Rn --arg t "$type" '$t')"
   fi
   local doc
-  doc="$(jq -n \
+  # MSYS2_ARG_CONV_EXCL='*': prevent git-bash on Windows from mangling --arg
+  # values that look like unix paths (e.g. workspacePath /tmp/x → C:/.../x).
+  # Safe here because this jq -n has no positional file path argument.
+  doc="$(MSYS2_ARG_CONV_EXCL='*' MSYS_NO_PATHCONV=1 jq -n \
     --arg id "$pid" \
     --arg prompt "$prompt" \
     --arg wsp "$wsp" \

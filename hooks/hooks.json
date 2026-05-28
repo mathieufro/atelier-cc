@@ -1,20 +1,20 @@
 {
   "hooks": {
     "Stop": [
-      { "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/stop.sh" }] }
+      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.js\" \"${CLAUDE_PLUGIN_ROOT}/hooks/stop.sh\"" }] }
     ],
     "SubagentStop": [
-      { "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/subagent-stop.sh" }] }
+      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.js\" \"${CLAUDE_PLUGIN_ROOT}/hooks/subagent-stop.sh\"" }] }
     ],
     "PreToolUse": [
-      { "matcher": "Agent", "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pretooluse-agent.sh" }] },
-      { "matcher": "Skill", "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pretooluse-skill.sh" }] }
+      { "matcher": "Agent", "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.js\" \"${CLAUDE_PLUGIN_ROOT}/hooks/pretooluse-agent.sh\"" }] },
+      { "matcher": "Skill", "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.js\" \"${CLAUDE_PLUGIN_ROOT}/hooks/pretooluse-skill.sh\"" }] }
     ],
     "PostToolUse": [
-      { "matcher": "mcp__.*atelier_signal", "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/posttooluse-signal.sh" }] }
+      { "matcher": "mcp__.*atelier_signal", "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.js\" \"${CLAUDE_PLUGIN_ROOT}/hooks/posttooluse-signal.sh\"" }] }
     ],
     "SessionStart": [
-      { "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh" }] }
+      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.js\" \"${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh\"" }] }
     ]
   }
 }

@@ -40,7 +40,14 @@ ps_lock_acquire() {
   while ! mkdir "$lock" 2>/dev/null; do
     if [ -d "$lock" ]; then
       local mt now age
-      mt="$(stat -f %m "$lock" 2>/dev/null || stat -c %Y "$lock" 2>/dev/null || echo '')"
+      # GNU stat (Linux, git-bash on Windows) first; BSD stat (macOS) fallback.
+      # On git-bash, `stat -f %m` triggers GNU stat's filesystem-info mode and
+      # spews multi-line verbose output BEFORE returning non-zero — that output
+      # then gets concatenated with the `-c %Y` fallback's stdout, leaving $mt
+      # as a multi-line garbage string that fails `[ -gt ]`. The integer-regex
+      # gate below is the belt-and-braces guard.
+      mt="$(stat -c %Y "$lock" 2>/dev/null || stat -f %m "$lock" 2>/dev/null || echo '')"
+      [[ "$mt" =~ ^[0-9]+$ ]] || mt=""
       # If stat failed, the lock was just removed (or otherwise inaccessible) —
       # NOT stale. Treating a failed stat as "stale" would incorrectly rmdir
       # a freshly re-acquired lock, breaking serialization. Just retry mkdir.
