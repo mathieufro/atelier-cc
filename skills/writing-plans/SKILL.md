@@ -1,107 +1,44 @@
 ---
 name: writing-plans
-description: Creates implementation plans from specs — TDD task breakdown, edge case coverage, zero ambiguity, progress file task population
-stage: write-plan
+description: Authors an implementation BLUEPRINT from a spec — WHAT to build, HOW to build it, WHAT to test — precise enough that a sonnet implementer can't misread intent, without writing the literal code.
+stage: write_plan
 ---
 
-# Writing Plans
+# Writing Plans — the Blueprint
 
-You are creating an implementation plan from a finalized spec. The plan must be detailed enough that the implementer can execute with minimum codebase context and zero design decisions — everything is decided here.
+You author an implementation **blueprint** from a finalized spec and the investigation dossier. This is **opus-tier thinking work**: you decide every design question so the sonnet implementer only has to *type*. The blueprint is the middle path between a useless task list ("implement auth") and a full code transcript — each task carries enough intent, interface, and test design that the implementer **cannot** go wrong, but the literal code is theirs to write.
 
-## Core Principles
+## Ground first
 
-**TDD. YAGNI. DRY.** Every task follows test-driven development. Build only what the spec requires. Don't repeat yourself.
+Read the **dossier** and the **spec**. Then explore the codebase areas you'll touch: study how similar features are built — file organization, naming, error handling, how modules communicate, how tests are written. The blueprint must prescribe code that looks like it *belongs* in this codebase. Cite the real files and conventions you found (the dossier already surfaced many). Where a dossier `risk` or `openQuestion` bears on a specific task, name it on that task so the implementer inherits the hazard rather than you silently absorbing it.
 
-## Codebase Exploration
+## The contract — every task carries four things
 
-Before writing anything, deeply explore the codebase areas that will be modified. Study existing code, understand current architecture, check `docs/` for relevant documentation, understand the test setup and conventions.
+1. **What** — the unit and its single responsibility.
+2. **How** — the interface/signatures, the data shapes, the exact files to create/modify (real paths), the **patterns to follow** (cite real files/conventions), what to **reuse**, and the **sequencing**. Name the seams where this wires into existing code.
+3. **Tests** — the specific test cases, the **edge cases that actually matter** here, and the acceptance bar. Describe *what each test asserts and why* — the behavior, the boundary, the failure mode — **not** the test code.
+4. **Not** — do **NOT** write the literal implementation or literal test code. Describe them precisely and let the implementer write them. (If you catch yourself pasting a full function body, stop — that's the implementer's job.)
 
-**Match the codebase's patterns.** Find similar features already implemented and study how they're structured — file organization, naming conventions, error handling style, how modules communicate, how tests are written. The plan should prescribe code that looks like it belongs in this codebase, not code that works but feels foreign.
+## What the tests must be (so the implementer builds them right)
 
-The more context you absorb, the more precise and idiomatic the plan. Don't write generic plans — write plans that fit THIS codebase.
+- **Observable behavior, not internals** — a test breaks only when the contract changes, never on a refactor. Assert outputs, side effects, state transitions.
+- **Falsifiable** — ban vacuous assertions ("is defined", "truthy"). Every test must be able to fail on a real bug.
+- **Mock only at boundaries** — network, fs, time, randomness. Prefer the codebase's real test infra (temp dirs, in-memory stores) over mocks.
+- **One behavior per test**, parameterized across inputs where the logic repeats.
 
-## Plan Structure
+## Edge cases — think adversarially per task
 
-Write the plan to the pipeline directory path provided by the orchestrator (e.g. `.atelier/pipelines/2026-02-25-auth-feature/plan.md`). If running standalone without orchestrator context, write to `.atelier/pipelines/YYYY-MM-DD-<feature>/plan.md`.
+Boundaries (empty/zero/one/max/off-by-one) · invalid input · error paths (failure, corrupt state, permission, exhaustion) · concurrency (races, reentrancy, ordering) · state transitions (initial, already-there, invalid) · security (injection, path traversal, untrusted boundaries). Each task names which of these its tests must cover and why.
 
-**Header:**
+## Integration & wiring
 
-- Goal (one sentence)
-- Spec reference (path to the spec file in the pipeline directory)
-- Architecture approach (2-3 sentences)
-- Tech stack (key technologies/libraries)
+- Call out **integration tests** on the tasks that wire modules together (a new module registered with a router; two components now communicating; new code reading/writing shared state). They exercise the data flow across the seam — not internal logic.
+- The **final task(s) must wire the feature into the app** (register routes, mount components, update config). A blueprint that builds components but never connects them ships dead code.
 
-**Body:** Serial ordered task list.
+## Ordering
 
-## Task Format (TDD)
+Group tasks by the modules they touch; order for minimal context-switching; dependencies first, wiring last.
 
-Each task = one logical unit following TDD.
+## Output
 
-For each task:
-
-1. **Files:** exact paths (create/modify/test) with line ranges for modifications
-2. **Write the failing test** — exact test code
-3. **Run test via Strobe `debug_test` — verify it fails** — expected error
-4. **Write minimal implementation** — exact code
-5. **Run test via Strobe `debug_test` — verify it passes**
-6. **Checkpoint:** what should work after this task
-
-### What Makes a Good Test
-
-**Test observable behavior, not implementation details.** A test should break only when the system's contract changes, never when internals are refactored. Assert on outputs, side effects, and state transitions — not on which internal methods were called or in what order.
-
-**Every assertion must be specific and falsifiable.** Ban vacuous assertions — "is defined", "is truthy", "is not null" — as primary checks. If a test can't fail due to a real bug, it's noise. Each test must assert a concrete value, state change, or behavioral outcome.
-
-**Don't duplicate the type system.** If the language's type system (static types, traits, interfaces) already enforces a contract at compile time, don't retest it at runtime. Test the *behavior* that uses the contract, not the contract's shape. A test that assigns a value and asserts it equals itself is worthless.
-
-**Mock at boundaries, not internally.** Mock external systems (network, filesystem, hardware, time, random) — never mock the unit under test or its direct collaborators. When the codebase provides real test infrastructure (temp dirs, in-memory stores, test fixtures), prefer it over mocks. Over-mocking produces tests that pass while the real system is broken.
-
-**One behavior per test, multiple inputs welcome.** Each test targets one behavioral aspect but should exercise it thoroughly. Use parameterized/table-driven tests when verifying the same logic across multiple inputs — don't copy-paste the same test body with different values.
-
-### Edge Cases
-
-Don't just cover the happy path. Think adversarially for each task:
-
-- **Boundaries:** empty/zero, one, maximum, off-by-one, overflow/wraparound
-- **Invalid input:** malformed data, wrong types (in dynamic languages), out-of-range values
-- **Error paths:** network failures, corrupt state, permission denied, resource exhaustion
-- **Concurrency:** race conditions, reentrant calls, out-of-order events
-- **State transitions:** initial state, already-in-target-state, invalid transitions
-- **Security:** injection, path traversal, untrusted input at system boundaries
-
-Each task gets a dedicated "Edge cases" subsection listing which of these the tests cover and why they matter.
-
-### Zero Ambiguity
-
-Complete code snippets, not "add validation". Exact test commands with expected output. The implementer should not need to make any design decisions — every decision is made in the plan.
-
-### Integration Tests
-
-Unit tests verify each module in isolation. Integration tests verify that modules work together across boundaries. **The plan must include integration tests for tasks that wire modules together.**
-
-When a task connects two or more components built in this plan (or connects new code to existing systems), that task's tests should exercise the data flow across the seam — not re-test internal logic. Feed realistic input at one end, assert on the output or side effect at the other end.
-
-Integration tests belong on wiring tasks, not on every task. Typical triggers:
-- A new module is registered with a framework or router
-- Two components built in separate tasks now communicate (events, callbacks, IPC, protocol messages)
-- New code reads/writes shared state (files, databases, shared memory)
-
-Keep integration tests focused on the contract at the boundary: correct data format in, correct behavior out, and error propagation across the seam.
-
-## Task Ordering
-
-- Group tasks touching the same modules together
-- Order for minimal context switching — finish one area before moving to the next
-- **The final task(s) must wire the feature into the application.** Register routes, mount components, update configs, add menu items — whatever makes the feature reachable through the app's existing entry points. A plan that builds working components but never connects them to the app ships dead code.
-
-## Progress File
-
-After writing the plan, update the progress file in the pipeline directory (`progress.md`):
-
-1. Populate the `## Tasks` table with one row per task from the plan, all set to `[ ] pending`
-2. Update the `## Summary` counts to match
-3. Append to `## Iteration Log`: `- **Plan:** wrote <path>, N tasks`
-
-If the progress file doesn't exist (standalone use), create it with the bare structure (`# Progress`, `## Summary`, `## Tasks`, `## Iteration Log`).
-
-Call `atelier_signal` with `type: "stage_complete"` and `outputPath` set to the plan file path.
+Write the blueprint to the path the orchestrator assigns (e.g. `.atelier/pipelines/<id>/plan.md`). Header: goal (one sentence) · spec reference · architecture approach (2–3 sentences) · tech/libraries. Body: the serial, ordered task list in the contract above. Return the blueprint's path as your final message. If the spec leaves a design decision unmade or contradictory such that you cannot produce an unambiguous blueprint, return a **stuck-report** instead (`{stuck:true, stage:"write_plan", blocker:…, …}`).

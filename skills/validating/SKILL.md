@@ -1,49 +1,50 @@
 ---
 name: validating
-description: Autonomous validation — reads spec Validation Protocol, executes checks, loops to fix failures
+description: Autonomous validation — reads the spec's Validation Protocol, executes the checks, loops to fix failures, returns a report. Always autonomous; never asks the user.
 stage: validate
 ---
 
 # Validation
 
-You are the validate stage. Your job is to verify the implementation works by executing the spec's Validation Protocol. You have two operating modes depending on the spec content.
+You are the **validate** stage, dispatched as a single autonomous worker. Your job: verify the implementation actually works by executing the spec's **Validation Protocol**, fixing what you can, and returning a report. There is **no user** at this stage — you never ask for confirmation, and the end-of-pipeline human summary is the orchestrator's job, not yours.
 
-## Step 1: Find the Validation Protocol
+## Ground first
 
-Read the spec artifact from the pipeline directory (path provided in the task instruction). Look for a section titled "Validation Protocol" (or "## Validation Protocol").
+Read the **dossier** and the **spec** from the paths the orchestrator passes in the task framing — they are already produced upstream, so consume them rather than cold-exploring. The orchestrator also gives you the **base ref / diff range** and the relevant **artifact paths**; use the provided diff range to see what changed — do **not** hardcode `main` or guess a base branch (that breaks on worktree and non-`main` pipelines).
 
-- **Found and non-empty** → Mode A (execute validation)
-- **Found but says "N/A"** → Mode B (no validation needed)
-- **Not found** → Mode B (no validation protocol)
+## Find the Validation Protocol
 
-## Mode A: Execute Validation Protocol
+In the spec, find the section titled **"Validation Protocol"**.
 
-1. **Parse the protocol.** Extract each validation step: the command to run, the success criteria (exit code, output pattern, file content), and failure diagnosis guidance.
+- **Found and non-empty** → execute it (below).
+- **Found but `N/A`, or not found** → there is nothing executable to run. Write a one-line report noting "no validation protocol — nothing to execute" (or skip the report), then return a DONE-SIGNAL as your final message.
 
-2. **Execute each validation command** via bash. Capture stdout, stderr, and exit code.
+## Execute the protocol
 
-3. **Evaluate results** against the stated success criteria.
+1. **Parse it.** Extract each step: the command to run, the success criteria (exit code, output pattern, file content), and any failure-diagnosis guidance.
 
-4. **All pass →** Write a validation report artifact to the assigned output path. Signal `stage_complete` with `verdict: "done"`.
+2. **Run each command** via bash. Capture stdout, stderr, and exit code. For tests, use Strobe `debug_test` so you get live progress, structured results, and stuck detection — never raw `bun run test`.
 
-5. **Some fail →** Analyze failure output using the spec's diagnosis guidance:
-   - Read the failure output carefully
-   - Identify the root cause (test assertion, missing file, wrong output, compilation error, missing dependency)
-   - Make minimal, targeted fixes (edit source files, add missing imports, fix logic errors, install missing dependencies)
-   - Do NOT re-run the entire pipeline — just fix and re-validate
-   - Re-run the validation commands
-   - Repeat up to **5 iterations** total
+3. **Evaluate** each result against its stated success criteria.
 
-6. **Max iterations exhausted →** Write a validation report documenting what passed, what still fails, and what was attempted. Signal `stage_complete` with `verdict: "done"`. The pipeline always advances regardless of validation outcome — partial fixes are still valuable.
+4. **All pass** → write the validation report to the assigned output path and return a DONE-SIGNAL stating the path and result (`PASS`).
 
-### Between iterations
+5. **Some fail** → diagnose using the spec's guidance and the actual failure output:
+   - Read the failure output carefully; identify the root cause (test assertion, missing file, wrong output, compile error, missing dependency).
+   - Make **minimal, targeted** fixes — edit source, add a missing import, fix a logic error, install a missing dep. You CAN modify source files here; that is expected.
+   - Do NOT re-run the whole pipeline — just fix and re-validate the affected commands.
+   - Repeat: up to **~5 internal fix/re-validate cycles** before you finalize. This is your own worker-internal budget; whether the pipeline advances on a partial result is the orchestrator's decision via its own caps — not something you force.
 
-- Maintain full context — you remember previous failures and fixes
-- If a fix makes things worse (more failures than before), undo the specific lines you changed in the last iteration and try a different approach. Use `git diff HEAD` to see all modifications and selectively restore sections if needed
-- If the same failures keep recurring (circular regression), stop early and report the cycle
-- Recognize flaky tests — if a test passes on re-run without code changes, note it as flaky rather than claiming a fix
+6. **Budget exhausted** → write a report documenting what passed, what still fails, and what you attempted, then return a DONE-SIGNAL with result `PARTIAL`. Partial fixes are still valuable.
 
-### Validation report format
+### Between cycles
+
+- You keep full context — remember previous failures and fixes.
+- If a fix makes things worse (more failures than before), undo just the lines you changed last cycle (`git diff HEAD` to see your modifications, restore selectively) and try a different approach.
+- If the same failures keep recurring (circular regression), stop early and report the cycle.
+- Recognize flaky tests — if a test passes on re-run with no code change, note it as flaky rather than claiming a fix.
+
+## Validation report format
 
 Write to the assigned output path:
 
@@ -52,9 +53,6 @@ Write to the assigned output path:
 
 ## Result
 [PASS | PARTIAL | NEEDS_ATTENTION]
-
-## Iterations
-[N] iteration(s) used out of 5 maximum
 
 ## Validation Steps
 ### Step 1: [command]
@@ -65,32 +63,20 @@ Write to the assigned output path:
 ### Step 2: ...
 
 ## Summary
-[Brief description of final state]
+[Brief description of final state; note any flaky tests or unresolved failures]
 ```
 
-## Mode B: No Validation Protocol
+`PASS | PARTIAL | NEEDS_ATTENTION` is the human-readable Result line. **Echo that same result in your final DONE-SIGNAL** so the orchestrator can record it in state.json — there is no out-of-band verdict field.
 
-Check the task instruction for operating context:
+## Boundaries
 
-- **If "Mode: autonomous" is present** → Signal `stage_complete` with `verdict: "done"` immediately. No validation protocol exists and no user is present. Write no artifact.
+- You do **not** handle git operations or worktree cleanup — that is the orchestrator's job after you return.
+- Validation commands run in the workspace directory (the project root the orchestrator put you in).
 
-- **Otherwise (interactive pipeline)** → Present a summary of the pipeline work:
-  1. Read all pipeline artifacts from the pipeline directory — spec, plan, reviews, code reviews, simplification notes.
-  2. Read the git diff of changes: `git diff main..HEAD` (or the appropriate base branch).
-  3. Present a structured summary (purpose, changes made, test results, review findings addressed).
-  4. Ask the user to confirm: "This work is ready. Shall I complete the pipeline?"
-  5. On confirmation, signal `stage_complete` with `verdict: "done"`.
-  6. If the user requests changes, make them and update the summary.
+## Returning
 
-## Important
+Write your report to the assigned path, then end your turn with your result as your **final message**:
 
-- You do NOT handle git operations or worktree cleanup — that is the orchestrator's job after you signal.
-- For Mode A: you CAN modify source files to fix validation failures. This is expected behavior.
-- For Mode B interactive: only signal `stage_complete` after explicit user confirmation.
-- The validation commands run in the workspace directory, which is the project root.
+- `DONE — validation PASS, report at <path>` (or `PARTIAL` / `NEEDS_ATTENTION`).
 
-## Signal
-
-Call `atelier_signal` with `type: "stage_complete"` and `verdict: "done"` when validation completes (Mode A) or when the user confirms (Mode B interactive) or immediately (Mode B autonomous).
-
-If Mode A produces a validation report, include `outputPath` pointing to the report file.
+If you are genuinely blocked from even *running* validation — e.g. a missing toolchain you cannot install — return a STUCK-REPORT as your final message instead: `{stuck:true, stage:"validate", attempted:[…], blocker:…, lastError:…, partialArtifacts:{report:<path>}}`. The orchestrator reads your final message and updates state.json.

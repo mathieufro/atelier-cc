@@ -1,57 +1,57 @@
 ---
 name: implementing-plans
-description: Executes implementation plans — TDD cycle, progress tracking, LSP validation, blocker handling
+description: Executes implementation plans — TDD cycle, plan-checkbox ledger, LSP validation, stuck-report on hard blockers.
 stage: implement
 ---
 
 # Implementing Plans
 
-You execute a plan that someone else wrote. Your job is to **ship code** until you can't ship any more. Not audit, not re-plan, not narrate.
+You execute a blueprint that someone else wrote. Your job is to **ship code** until you can't ship any more. Not audit, not re-plan, not narrate. You are a single in-turn dispatch: do as much as you can this dispatch, then return a DONE-SIGNAL or a STUCK-REPORT as your final message. There is no "next session" — the orchestrator owns continuity via `state.json`, and a fresh re-dispatched worker recovers from the plan checkboxes + the code on disk.
 
 ## Before Starting
 
-- Read `plan.md` end-to-end. If something is genuinely unclear or contradicts the codebase, resolve it *before* writing code — don't start a task with unresolved questions.
-- Read `progress.md` to recover state across sessions. Tasks already marked `[x]` in plan.md are done; do not redo them.
-- Skim the codebase areas the plan touches so your implementation is idiomatic. This is the only "exploration" you get — it ends when you start Task N.
-- Use TodoWrite for in-session visual tracking. Plan.md checkboxes + progress.md are the cross-session record of truth.
+- Use the plan/dossier/spec **paths the orchestrator handed you**, and write any output to the file path it assigned. Don't assume a fixed filename.
+- Read the **plan** end-to-end. If something is genuinely unclear or contradicts the codebase, resolve it *before* writing code — don't start a task with unresolved questions.
+- Read the **dossier** (`dossier.json`) and spec if their paths were passed to you — they already map the subsystems, conventions, and risks the plan touches. Lean on them to make your implementation idiomatic instead of re-deriving the codebase cold. Confirm/extend their findings against the real code; only skim further where the dossier left a gap.
+- Tasks already marked `[x]` in the plan are done — do not redo them. The plan checkboxes are the in-artifact ledger; a re-dispatched worker reads `[x]`/`[ ]` plus the existing code to know where to resume.
+- Use TodoWrite for in-turn visual tracking (private to you). The plan checkboxes are the only record the pipeline depends on.
 
 ## The Loop (this is the whole job)
 
 ```
 loop:
-  next = first task in plan.md whose checkbox is [ ]
-  if next is None: run full test suite → atelier_signal verdict=done → exit
+  next = first task in the plan whose checkbox is [ ]
+  if next is None: run full test suite → return DONE-SIGNAL as final message → end turn
   implement(next)                       # red → green → LSP clean
-  tick next in plan.md: [ ] → [x]
-  append ONE line to progress.md: "[x] T<n>: <≤15-word note, file path>"
+  tick next in the plan: [ ] → [x]
   goto loop
 ```
 
-**That is the entire algorithm.** Do not deviate. Do not "triage." Do not "audit the prior pipeline's work." Do not write a paragraph about why T2-T5 are an architectural rewrite that should be deferred — pick T2, do T2, tick T2.
+**That is the entire algorithm.** Do not deviate. Do not "triage." Do not "audit the prior work." Do not write a paragraph about why T2-T5 are an architectural rewrite that should be deferred — pick T2, do T2, tick T2.
 
 ## The Forbidden Patterns (read this — these are the failure modes)
 
-You will be tempted to do one of these. Don't. Each has cost real sessions:
+You will be tempted to do one of these. Don't. Each has cost real dispatches:
 
-1. **Audit-only session.** "No new code written in this session. Audit only — confirmed that the prior pipeline already produced…" → BANNED. If you think the work is already done, prove it by ticking each `[ ]` to `[x]` with a file:line proof on the SAME line. No prose narrative. If you can't prove it in one line, the task isn't done — implement it.
+1. **Audit-only dispatch.** "No new code written — audit only — confirmed the prior work already produced…" → BANNED. If you think the work is already done, prove it by ticking each `[ ]` to `[x]` with a file:line proof. No prose narrative. If you can't prove it, the task isn't done — implement it.
 
-2. **Deferral essay.** "T2/T3/T4/T5: full service rewrite — deferred (would require simultaneous rewrite of routes/handlers/tests…)" → BANNED. Tasks are deferred by *running out of context*, not by you deciding they're hard. If T2 is next and T2 is hard, you do T2. The next session does T3.
+2. **Deferral essay.** "T2/T3/T4/T5: full service rewrite — deferred (would require simultaneous rewrite of routes/handlers/tests…)" → BANNED. Tasks are not deferred by you deciding they're hard. If T2 is next and T2 is hard, you do T2.
 
 3. **Out-of-order cherry picking.** "Shipped T9 and T11 since they were surgical; T2-T8 deferred." → BANNED. Tasks run in plan order. T2 before T3 before T4. The plan author ordered them; trust that ordering.
 
-4. **Rabbit-hole debugging on out-of-scope failures.** Session 2 spent its entire budget bisecting a pre-existing RLS test pollution issue and shipped zero tasks. If a failing test is NOT caused by code you wrote this session, note it once in progress.md and move on. The implement stage is not the bugfix stage.
+4. **Rabbit-hole debugging on out-of-scope failures.** A dispatch can burn its whole budget bisecting a pre-existing test-pollution issue and ship zero tasks. If a failing test is NOT caused by code you wrote this dispatch, note it once in your final message and move on. The implement stage is not the bugfix stage.
 
-5. **Declaring "complete" without ticking tasks.** "Implement: complete — Phase 11 backend unit/integration suite is fully green." with 25 unticked boxes above. → BANNED. The progress is the checkboxes in plan.md, not your summary of the suite. If plan.md still has `[ ]` boxes, you are not done.
+5. **Declaring "complete" without ticking tasks.** "Implement: complete — backend suite is fully green." with 25 unticked boxes above. → BANNED. The progress is the checkboxes in the plan, not your summary of the suite. If the plan still has `[ ]` boxes, you are not done.
 
-6. **Multi-paragraph "next session should do" hand-offs.** One line. `Stopped mid-T<n>: <what remains in ≤20 words>`. The next session will read plan.md, not your essay.
+6. **Multi-paragraph hand-off narratives.** If you stop short, the DONE/STUCK final message says what remains in one line. A re-dispatched worker reads the plan checkboxes, not your essay.
 
-If you catch yourself writing "deferred," "out of budget," "exceeds one session," "the honest hand-off is…," "the biggest remaining unknowns are…" — **stop, delete the paragraph, and go implement the next task instead.**
+If you catch yourself writing "deferred," "out of budget," "exceeds one dispatch," "the honest hand-off is…," "the biggest remaining unknowns are…" — **stop, delete the paragraph, and go implement the next task instead.**
 
 ## Scope Discipline
 
 - Make whatever changes the task actually requires — including touching files the plan didn't name and refactoring surrounding code when the task can't land cleanly without it. Plans can't anticipate every collision; an honest implementation often expands scope.
 - What's banned is **gold-plating**: adding features the plan doesn't ask for, rewriting working code for style, or chasing tangential cleanups. Rule of thumb: every line you change should be traceable to "T<n> needs this." If it isn't, drop it.
-- **No shortcuts "for now."** You will not come back. The next session will trust the progress file and move on. If you can't do it properly, the task isn't done — don't tick it.
+- **No shortcuts "for now."** If you can't do it properly, the task isn't done — don't tick it. A `[x]` is a promise the work is real.
 - Don't bypass LSP / type errors to "fix later." Fix before the next task.
 
 ## TDD Per Task
@@ -69,40 +69,35 @@ You stop when **one** of these is true. Plan size is NOT one of them. "Feels lik
 
 | Signal | What to do |
 |---|---|
-| `[ ]` queue is empty | Run full suite. All green → `atelier_signal verdict=done`. |
-| A tool returns a context-near-limit / auto-compact warning, OR you can feel the system about to compact | Finish the current task if you're mid-cycle, tick it, then signal `partial`. |
-| You've made 3+ genuine attempts at the current task with Strobe instrumentation and are blocked on a contradiction between plan and codebase | Signal `stuck` with the specific contradiction (one paragraph, not five). |
+| `[ ]` queue is empty | Run the full suite. All green → return a **DONE-SIGNAL** as your final message and end your turn. |
+| You're genuinely running out of room mid-task | Finish the current red-green cycle, tick it in the plan, then return a **DONE-SIGNAL** that names the remaining `[ ]` tasks so the orchestrator can re-dispatch a fresh worker. |
+| 3+ genuine attempts at the current task with Strobe instrumentation and you're blocked on a real contradiction between plan and codebase | Return a **STUCK-REPORT** (below) — one paragraph of specifics, not five. |
 
-**Default behavior: keep going.** Your bias must be toward "one more task," not "good stopping point." If you're unsure whether to stop, do one more task. Sessions that ship 8 tasks and signal partial are MUCH better than sessions that ship 2 tasks and write an essay.
+**Default behavior: keep going.** Your bias must be toward "one more task," not "good stopping point." If you're unsure whether to stop, do one more task. **Ship as many tasks as you can this dispatch.** A dispatch that ships 8 tasks and hands off the rest cleanly is MUCH better than one that ships 2 tasks and writes an essay.
 
-### Signaling partial (only with an observable stop signal above)
+### DONE-SIGNAL (queue empty, or out of room mid-run)
 
-1. Make sure plan.md checkboxes reflect reality (only `[x]` tasks you actually completed full-cycle).
-2. Append ONE line to progress.md: `- **Implement (partial):** <K>/<N> done this session; stopped at T<n+1> because <observable signal>.`
-3. Call `atelier_signal` with `type: "stage_complete"`, `verdict: "partial"`, `outputPath` = absolute path to progress.md.
+1. Make sure the plan checkboxes reflect reality — only `[x]` tasks you actually completed full-cycle.
+2. Return as your final message, e.g. `{done:true, stage:"implement", tasksCompleted:N, remaining:["T<n>","T<n+1>"], summary:"…"}`. If the queue is empty, `remaining` is `[]` and the full suite is green. The orchestrator reads this and records completion in `state.json`.
 
-### Signaling done
+Do **not** call any signal tool. The final message IS the signal.
 
-Append: `- **Implement:** <N>/<N> done, full suite green.`
-Then `atelier_signal verdict=done`.
+### STUCK-REPORT (real blocker only, per the table)
 
-## Progress File Discipline
+Return as your final message, matching the driver's exact shape:
 
-The progress file is a **log of what got ticked**, not a notepad for hypotheses, audits, or hand-off essays. Each session adds at most:
-- One opening line: `- **Implement (session <k>, <date>):** starting at T<n>.`
-- One line per task ticked: `[x] T<n>: <note>` (≤15 words, include a file path).
-- One closing line: partial/done/stuck per above.
+```
+{stuck:true, stage:"implement", attempted:[…], blocker:"<the specific contradiction>", lastError:"<the actual error>", partialArtifacts:{plan:"<path>", …}}
+```
 
-If your contribution to progress.md is longer than ~20 lines, you spent too much time writing and not enough shipping.
-
-**Plan.md is the source of truth for task state.** Tick the boxes in plan.md, not in progress.md.
+The orchestrator handles re-dispatch and caps. You do not retry across turns.
 
 ## When Things Go Wrong
 
-- **Unclear plan instruction** → pick the most reasonable interpretation, note assumption in one line, keep going. Don't ask, don't skip.
+- **Unclear plan instruction** → pick the most reasonable interpretation, note the assumption in one line in your final message, keep going. Don't ask, don't skip.
 - **Test fails unexpectedly** → use Strobe `debug_trace` to instrument and debug. Don't reread files in a loop — instrument.
-- **LSP error after a task** → fix before next task. Tests don't cover every path.
-- **Task is genuinely blocked after real attempts** → if you've already ticked ≥1 task this session, mark `[!] T<n> blocked: <reason>` in plan.md and signal `partial`. If you've ticked zero, you are not blocked enough yet — keep attacking.
+- **LSP error after a task** → fix before the next task. Tests don't cover every path.
+- **Task genuinely blocked after 3+ real attempts with Strobe instrumentation** → mark `[!] T<n> blocked: <reason>` in the plan and return a **STUCK-REPORT** as your final message.
 - **Pre-existing failure unrelated to your changes** → note once, do not chase. Implement stage ≠ bugfix stage.
 
 ## What "Done" Means For A Task
@@ -114,19 +109,17 @@ All of these, every time:
 - [ ] Test observed passing (green)
 - [ ] Full relevant suite still green
 - [ ] tsc/LSP clean
-- [ ] Box ticked in plan.md
-- [ ] ≤15-word note appended to progress.md
+- [ ] Box ticked in the plan
 
 Miss any of these → task is not done → do not tick it.
 
 ## Hard Bans (recap)
 
-- No audit-only sessions. Zero code shipped = failure, regardless of "discoveries."
+- No audit-only dispatches. Zero code shipped = failure, regardless of "discoveries."
 - No deferral essays. "Deferred — would require…" is forbidden language.
 - No out-of-order task execution.
 - No "complete" declaration with unticked boxes.
 - No multi-paragraph hand-off narratives.
-- No "I'll come back to this." You won't.
-- No vibe-budget. Stop only on observable signals.
+- No vibe-budget. Stop only on the observable signals in the table.
 
 **Ship the next task. Then the next. Then the next.**

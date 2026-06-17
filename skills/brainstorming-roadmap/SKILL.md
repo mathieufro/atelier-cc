@@ -20,11 +20,11 @@ The spec passed review. Your job is to determine the best order to build it, wha
 
 ## Before Your First Question
 
-Study the main spec thoroughly — understand all components, dependencies between them, and integration points.
+Study the reviewed main spec thoroughly, and read the **`dossier.json`** already in the pipeline dir — the orchestrator's investigation produced it (`{depth, recommendedApproach, findings, conventions, risks, openQuestions, citations}`). Do not re-run a cold from-scratch exploration; confirm and extend the dossier's findings against the real code. Let its **risks and dependencies ground the phase boundaries and validation strategy**, and seed your opening questions from its `openQuestions`. The goal is to understand all components, the dependencies between them, and the integration points well enough to phase them cleanly.
 
 ## The Process
 
-1. Propose a phase breakdown with rationale for the ordering.
+1. Propose a phase breakdown with rationale for the ordering, leading with what the dossier's `recommendedApproach` and risks suggest.
 2. Discuss each phase with the user: is the scope right? Are the boundaries clean? Is the validation concrete enough?
 3. Present one phase at a time for validation before moving to the next.
 
@@ -67,30 +67,8 @@ The roadmap is a strategic implementation document — it answers "in what order
 - Phase dependency graph (ASCII)
 - Execution model statement: phases are sequential with validation gates — each phase's validation must pass before the next phase starts
 
-Write the finished roadmap to the pipeline directory path provided by the orchestrator (e.g. `.atelier/pipelines/2026-02-25-auth-system/roadmap.md`). If running standalone without orchestrator context, write to `.atelier/pipelines/YYYY-MM-DD-<topic>/roadmap.md`.
+Write the finished roadmap to the pipeline directory path provided by the orchestrator (e.g. `.atelier/pipelines/2026-02-25-auth-system-a1b2/roadmap.md`). If running standalone without orchestrator context, write to the orchestrator-assigned path under `.atelier/pipelines/`.
 
 ## User Approval Gate
 
-**After writing the roadmap, you MUST ask the user to review it before signaling completion.** This is mandatory — never signal `stage_complete` without explicit user approval. Ask the user to read the roadmap and either confirm it's good to move forward, or give feedback. If they have feedback, revise accordingly and ask again. Only call `atelier_signal` after the user explicitly approves.
-
-## Progress File
-
-After writing the roadmap, append an entry to the progress file's `## Iteration Log` in the pipeline directory:
-
-- `- **Roadmap:** wrote <path>`
-
-If the progress file doesn't exist (standalone use), create it with the bare structure:
-
-```markdown
-# Progress
-
-## Summary
-- Total: 0 | Done: 0 | Remaining: 0
-
-## Tasks
-
-| # | Task | Status |
-|---|------|--------|
-
-## Iteration Log
-```
+**After writing the roadmap, you MUST ask the user to review it before completing.** Mandatory — never finish without explicit user approval. Ask the user to read the roadmap and either confirm it's good to move forward, or give feedback; revise and re-ask until they approve. When approved, the stage is complete — you (the orchestrator) record it in `state.json` (`done[]`, `phase`, `artifacts`) and advance. **This is the only `state.json` write for the stage — don't update it mid-conversation or journal the discussion into it; the design lives in the roadmap.** There is no `atelier_signal`; you run this stage yourself.

@@ -1,7 +1,0 @@
-Client: Atelier Consulting SARL
-Date: 2026-03-28
-Piece: FACT-2026-0328-003
-Total HT: 4500.00 EUR
-TVA 20%: 900.00 EUR
-Total TTC: 5400.00 EUR
-Description: Mission de conseil — Q1 2026, audit infrastructure cloud

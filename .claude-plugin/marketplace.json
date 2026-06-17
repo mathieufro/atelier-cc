@@ -2,12 +2,14 @@
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
   "name": "atelier",
   "version": "0.1.0",
-  "description": "Local install marketplace for the atelier-cc plugin.",
-  "owner": { "name": "Atelier" },
+  "description": "Local install marketplace for the atelier-cc workflow-era plugin.",
+  "owner": {
+    "name": "Atelier"
+  },
   "plugins": [
     {
       "name": "atelier",
-      "description": "Atelier — 15-stage autonomous pipeline for software development.",
+      "description": "Atelier — skill-driven autonomous pipeline orchestrator (Task / Feature / Epic): investigation-first speccing, blueprint planning, fan-out review, full autonomy.",
       "source": "./",
       "category": "development"
     }

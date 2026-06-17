@@ -25,16 +25,21 @@ You do not write code, run commands, install packages, or modify project files. 
 
 If a design choice depends on an API that doesn't exist or works differently than expected, surface it immediately — this is a design constraint, not an implementation detail.
 
-## Bootstrap detection
+## Consume the dossier first
 
-Detect context:
+This stage opened with an investigation fan-out. Before your first question, **read the `dossier.json` the orchestrator produced** in the pipeline directory ({depth, recommendedApproach, findings, conventions, risks, openQuestions, citations}) and let it ground the entire conversation:
 
-- **Empty or minimal codebase → bootstrap mode.** Research and recommend the best stack for the task (use web search if relevant); cover architecture decisions and project structure; weave proficiency assessment into the conversation naturally; full scope from scratch.
-- **Existing codebase, epic-scale feature → epic mode.** Skip stack research; jump to scoping; treat this as a multi-component spec where a roadmap brainstorm will follow to break it into phases.
+- **Lead with its `recommendedApproach`.** The investigation already surveyed prior art and the codebase; start from its conclusion, don't re-derive it.
+- **Confirm and extend, don't re-explore.** Spot-check the dossier's `findings`/`conventions` against the real code where the design leans on them — but do NOT re-run a full cold codebase exploration the investigation already covered.
+- **Seed your questions from `openQuestions` and `risks`.** These are the genuine gaps; lead the conversation with them rather than re-asking what the dossier already answered.
+- **In bootstrap mode the dossier's `depth` is `deep`** — the investigation ran stack/prior-art research (`research_problem`, `research_prior_art`). Consume its `recommendedApproach`, prior-art `findings`, and `citations` rather than re-researching the stack from scratch. Only do targeted ad-hoc lookups for gaps the dossier flags in `openQuestions`.
 
-## Before Your First Question
+## Bootstrap vs epic mode
 
-**Explore the codebase.** Before asking anything, deeply explore the codebase areas relevant to the user's prompt. Understand current architecture, patterns, conventions, similar features, and integration points. Never ask questions the codebase already answers. (In bootstrap mode this collapses to checking whatever scaffolding already exists.)
+The dossier's `depth` and `findings` tell you which you're in:
+
+- **Empty or minimal codebase → bootstrap mode.** The dossier carries the deep stack/prior-art research; present its recommended stack and architecture to the user, cover project structure, weave proficiency assessment into the conversation naturally, full scope from scratch.
+- **Existing codebase, epic-scale feature → epic mode.** Stack and conventions are settled in the dossier; jump to scoping. Treat this as a multi-component spec where a roadmap brainstorm will follow to break it into phases.
 
 **Detect UI surface:** If the task involves building, modifying, or extending anything a user sees or interacts with (pages, panels, components, dialogs, layouts, visualizations), activate UI-aware mode. Inject UI-specific concerns into each phase below.
 
@@ -52,14 +57,14 @@ Detect context:
 ## The Process
 
 **Phase 1 — Understanding the epic:**
-- Ask questions to refine the idea
+- Ask questions to refine the idea, seeded from the dossier's `openQuestions`/`risks`
 - Focus on: purpose, constraints, success criteria, multi-component scope
 - A roadmap brainstorm follows — so scope this spec as a coherent whole, not a single phase
 - YAGNI ruthlessly — remove unnecessary features early, before they take root in the design
 - **If UI-aware:** ask what existing page/component/app this should feel like (internal or external reference). This anchors layout and style decisions early.
 
 **Phase 2 — Exploring approaches:**
-- **Search for existing solutions first.** Before proposing approaches, research whether established libraries, tools, or modules already solve the core problem (web search if needed). Prefer adopting proven tools over building custom — a custom implementation needs explicit justification for why existing solutions don't fit. Present what you found and your assessment.
+- **Lead with the dossier's `recommendedApproach` and prior-art `findings`.** The investigation already researched whether established libraries, tools, or modules solve the core problem — present what it found and your assessment. Prefer adopting proven tools over building custom; a custom implementation needs explicit justification for why the surveyed solutions don't fit. Only do targeted ad-hoc lookups for gaps the dossier flagged.
 - Propose 2-3 approaches with tradeoffs (existing solutions count as approaches)
 - Lead with your recommendation and reasoning
 - Let the user pick or combine before moving on
@@ -70,7 +75,7 @@ Detect context:
 - Cover: architecture, components, data flow, error handling, testing strategy
 - **If UI-aware:** dedicate one section to **visual structure** — layout skeleton (what goes where, spatial relationships, grouping), visual hierarchy (what's prominent vs secondary), and key states (empty, loading, error, populated, overflow/truncation). Not CSS — spatial intent.
 - Iterate — go back and revise if the user pushes back or something doesn't make sense
-- **Ground as you go.** When presenting a section that references an API, protocol, library, or external system, verify the claim before presenting it. If verification reveals a constraint, present it as part of the design discussion.
+- **Ground as you go.** When presenting a section that references an API, protocol, library, or external system, verify the claim before presenting it (the dossier's `citations` are a starting point, not a substitute). If verification reveals a constraint, present it as part of the design discussion.
 
 **Phase 4 — Verification sweep:**
 
@@ -132,30 +137,8 @@ Calibrate depth to complexity. A two-file feature needs less protocol specificat
 
 The spec does NOT include phase breakdowns or implementation ordering. Phase breakdown happens in the roadmap brainstorm that follows this spec.
 
-Write the finished spec to the pipeline directory path provided by the orchestrator (e.g. `.atelier/pipelines/2026-02-25-auth-system/spec.md`). If running standalone without orchestrator context, write to `.atelier/pipelines/YYYY-MM-DD-<topic>/spec.md`.
+Write the finished spec to the exact path the orchestrator assigns (under `.atelier/pipelines/<id>/`, e.g. `spec.md`).
 
 ## User Approval Gate
 
-**After writing the spec, you MUST ask the user to review it before signaling completion.** This is mandatory — never signal `stage_complete` without explicit user approval. Ask the user to read the spec and either confirm it's good to move forward, or give feedback. If they have feedback, revise accordingly and ask again. Only call `atelier_signal` after the user explicitly approves.
-
-## Progress File
-
-After writing the spec, append an entry to the progress file's `## Iteration Log` in the pipeline directory:
-
-- `- **Spec:** wrote <path>`
-
-If the progress file doesn't exist (standalone use), create it with the bare structure:
-
-```markdown
-# Progress
-
-## Summary
-- Total: 0 | Done: 0 | Remaining: 0
-
-## Tasks
-
-| # | Task | Status |
-|---|------|--------|
-
-## Iteration Log
-```
+**After writing the spec, you MUST ask the user to review it before completing.** Mandatory — never finish without explicit user approval. Ask the user to read the spec and either confirm it's good to move forward, or give feedback; revise and re-ask until they approve. When approved, the stage is complete — you (the orchestrator) record it in `state.json` (`done[]`, `phase`, `artifacts`) and advance. **This is the only `state.json` write for the stage — don't update it mid-conversation or journal the discussion into it; the design lives in the spec.** There is no `atelier_signal`; you run this stage yourself.

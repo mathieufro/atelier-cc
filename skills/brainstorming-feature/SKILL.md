@@ -1,16 +1,18 @@
 ---
 name: brainstorming-feature
-description: Guides feature-mode brainstorm sessions in an existing codebase — proficiency-adaptive questioning, collaborative spec authoring
+description: Guides feature-mode brainstorm sessions in an existing codebase — dossier-grounded, proficiency-adaptive questioning, collaborative spec authoring
 stage: brainstorm
 ---
 
 # Feature Brainstorming
 
-You are guiding a brainstorm session for a single feature inside an existing codebase. Stack, conventions, and proficiency are already known from project memory — you skip stack research and jump straight to feature scoping. Your deliverable is a single markdown spec file written to the path the orchestrator assigns.
+You (the orchestrator) run this brainstorm yourself as a conversation with the user — `brainstorm` is an interactive stage, not a dispatched subagent. You are guiding the design of a single feature inside an existing codebase. Stack, conventions, and proficiency are already known from project memory — you skip stack research and jump straight to feature scoping. Your deliverable is one markdown spec file, written to the path you recorded in the pipeline's `state.json` `artifacts`.
+
+This spec is the artifact's place in the pipeline: **dossier in → spec out → consumed by the planner and the validate agent.** Write it so both can act on it without guessing.
 
 ## What "your output is a document" really means
 
-The **persistent artifact** you produce is one markdown spec file. The path to that file is provided by the orchestrator. Reaching that artifact REQUIRES a back-and-forth conversation with the user — the conversational turns are part of the job, not a violation of it. Do not write the spec until the user has discussed the design with you and approved moving from discussion to document.
+The **persistent artifact** you produce is one markdown spec file at the orchestrator-assigned path. Reaching that artifact REQUIRES a back-and-forth conversation with the user — the conversational turns are part of the job, not a violation of it. Do not write the spec until the user has discussed the design with you and approved moving from discussion to document.
 
 You do not write code, run commands, install packages, or modify project files. The only file you create is the spec.
 
@@ -25,9 +27,13 @@ You do not write code, run commands, install packages, or modify project files. 
 
 If a design choice depends on an API that doesn't exist or works differently than expected, surface it immediately — this is a design constraint, not an implementation detail.
 
-## Before Your First Question
+## Start From the Dossier
 
-**Explore the codebase.** Before asking anything, deeply explore the codebase areas relevant to the user's prompt. Understand current architecture, patterns, conventions, similar features, and integration points. Never ask questions the codebase already answers.
+The orchestrator has already run an investigation fan-out — **read `dossier.json` in the pipeline dir first.** It gives you the `recommendedApproach`, the relevant subsystems/files (`findings`), the codebase `conventions`, known `risks`, `openQuestions`, and `citations` (including any prior-art research done at depth). Let it ground the conversation:
+
+- **Confirm and extend, don't re-derive.** Verify the dossier's findings against the actual code — read the real types and integration points it cites — rather than re-running a cold from-scratch sweep of the codebase. Where the dossier is thin or the conversation surfaces an area it missed, explore that area directly. Never ask the user questions the dossier or the codebase already answers.
+- **Seed your first questions** from the dossier's `openQuestions` and `risks`.
+- **Lead with its `recommendedApproach`** when you reach Phase 2.
 
 **Detect UI surface:** If the task involves building, modifying, or extending anything a user sees or interacts with (pages, panels, components, dialogs, layouts, visualizations), activate UI-aware mode. Inject UI-specific concerns into each phase below.
 
@@ -45,14 +51,14 @@ If a design choice depends on an API that doesn't exist or works differently tha
 ## The Process
 
 **Phase 1 — Understanding the feature:**
-- Ask questions to refine the idea
+- Ask questions to refine the idea, seeding from the dossier's `openQuestions` and `risks`
 - Focus on: purpose, constraints, success criteria
 - YAGNI ruthlessly — remove unnecessary features early, before they take root in the design
 - **If UI-aware:** ask what existing page/component/app this should feel like (internal or external reference). This anchors layout and style decisions early. No reference = you must push harder on visual structure in Phase 3.
 
 **Phase 2 — Exploring approaches:**
-- **Search for existing solutions first.** Before proposing approaches, research whether established libraries, tools, or modules already solve the core problem (web search if needed). If something well-maintained and widely adopted exists, evaluate it against the project's constraints. Prefer adopting proven tools over building custom — a custom implementation needs explicit justification for why existing solutions don't fit. Present what you found and your assessment.
-- Propose 2-3 approaches with tradeoffs (existing solutions count as approaches)
+- **Consume the dossier's prior-art survey, don't redo it.** The dossier already surveyed established libraries/tools/modules and proposed a `recommendedApproach` with `citations`. Present that recommendation plus 2-3 approaches grounded in the dossier's findings, with tradeoffs (existing solutions count as approaches). Prefer adopting proven tools over building custom — a custom implementation needs explicit justification for why existing solutions don't fit.
+- Only do additional ad-hoc lookups if the conversation surfaces a gap the dossier didn't cover.
 - Lead with your recommendation and reasoning
 - Let the user pick or combine before moving on
 
@@ -124,30 +130,8 @@ Calibrate depth to complexity. A two-file feature needs less protocol specificat
 
 The spec does NOT include phase breakdowns or implementation ordering. If the scope warrants phasing, that happens in a separate roadmap brainstorm after this spec passes review.
 
-Write the finished spec to the pipeline directory path provided by the orchestrator (e.g. `.atelier/pipelines/2026-02-25-auth-feature/spec.md`). If running standalone without orchestrator context, write to `.atelier/pipelines/YYYY-MM-DD-<topic>/spec.md`.
+Write the finished spec to the path the orchestrator assigned (recorded in the pipeline's `state.json` `artifacts`).
 
 ## User Approval Gate
 
-**After writing the spec, you MUST ask the user to review it before signaling completion.** This is mandatory — never signal `stage_complete` without explicit user approval. Ask the user to read the spec and either confirm it's good to move forward, or give feedback. If they have feedback, revise accordingly and ask again. Only call `atelier_signal` after the user explicitly approves.
-
-## Progress File
-
-After writing the spec, append an entry to the progress file's `## Iteration Log` in the pipeline directory:
-
-- `- **Spec:** wrote <path>`
-
-If the progress file doesn't exist (standalone use), create it with the bare structure:
-
-```markdown
-# Progress
-
-## Summary
-- Total: 0 | Done: 0 | Remaining: 0
-
-## Tasks
-
-| # | Task | Status |
-|---|------|--------|
-
-## Iteration Log
-```
+**After writing the spec, you MUST ask the user to review it before completing.** Mandatory — never finish without explicit user approval. Ask the user to read the spec and either confirm it's good to move forward, or give feedback; revise and re-ask until they approve. When approved, the stage is complete: you (the orchestrator) record it in `state.json` (`done[]`, `phase`, `artifacts`) and advance. **This is the only `state.json` write for the stage — don't update it mid-conversation or journal the discussion into it; the design lives in the spec.**

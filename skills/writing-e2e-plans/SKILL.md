@@ -1,26 +1,30 @@
 ---
 name: writing-e2e-plans
 description: E2E test planning — environment research, scenario design, infrastructure architecture, visual validation strategy
-stage: write-e2e-plan
+stage: write_e2e_plan
 ---
 
 # Writing E2E Plans
 
-You are planning the E2E test strategy for a completed implementation. The plan must be detailed enough that the E2E implementer can execute with confidence — environment setup, scenario list, infrastructure design, and visual validation approach all decided here.
+You are the single subagent for the `write_e2e_plan` stage. Do this work yourself — do **not** spawn further agents; the orchestrator owns fan-out and model allocation. You produce one `e2e-plan.md`: a **blueprint** for the E2E suite — environment, scenarios, infrastructure, visual strategy all decided here, precise enough that the E2E implementer can execute without guessing, but the literal test code is theirs to write.
 
 E2E means **the real application runs in the real environment**. A component test rendered in jsdom with simulated messages is a unit test wearing a costume. Your plan must target the actual production path.
 
-## Before Writing Anything
+## Ground first — consume the dossier
 
-1. **Read the spec** — understand what was built and what the acceptance criteria are
-2. **Read the implementation** — understand the actual code, not just what the spec describes
-3. **Explore the test infrastructure** — what E2E tooling already exists in this project? Existing fixtures, helpers, test runners?
+The orchestrator hands you the **spec**, the **implementation plan**, and the investigation **dossier** (`{depth, recommendedApproach, findings, conventions, risks, openQuestions, citations}`). Read them first:
 
-## Step 1: Research the Real Environment
+- The **dossier** already surfaced the stack, conventions, risks, and pointers to the real code — confirm and extend it against the code that actually shipped; do **not** re-run a cold from-scratch exploration.
+- The **spec** gives the acceptance criteria — these become your scenarios.
+- The **plan** tells you what was built and where.
 
-Answer: **how do I programmatically launch, drive, and observe the real application?**
+Then explore the **test infrastructure** to fill the e2e-specific gaps the dossier didn't cover: existing E2E tooling, fixtures, helpers, runners, visual-test conventions.
 
-Use web search, read documentation, study how similar projects write E2E tests. Check whether the host provides official test utilities (VS Code has `@vscode/test-electron`, Electron has Playwright, web apps have Playwright/Cypress, Go has `httptest`, etc.).
+## Step 1: Research the real environment
+
+Answer: **how do I programmatically launch, drive, and observe the real application?** — scoped to what the dossier/spec/plan leave open, not a blank-slate sweep.
+
+Use web search and library docs; study how similar projects write E2E tests. Check whether the host provides official test utilities (Electron has Playwright, web apps have Playwright/Cypress, Go has `httptest`, etc.).
 
 Document in the plan:
 - **Launch**: how to programmatically start the real environment (command, API, test runner)
@@ -29,9 +33,7 @@ Document in the plan:
 - **Dependencies**: what needs to be installed (packages, tools, runtimes)
 - **Constraints**: known challenges (timing, cleanup, flakiness, CI limitations)
 
-**Verify claims.** Read actual library docs and types. If you say "@vscode/test-electron provides `runTests()`" — confirm the function exists with the assumed signature. Every technical assertion must be traced to its source.
-
-If research reveals the planned approach won't work, surface it in the plan as a constraint — don't hide it.
+**Verify claims.** Read actual library docs and types. If you say "the test runner provides `runTests()`", confirm the function exists with the assumed signature. Every technical assertion traces to its source.
 
 ### External dependencies
 
@@ -44,9 +46,9 @@ Some dependencies are genuinely impractical to run in tests (paid APIs with no f
 
 "It's complicated" is not impractical. "It costs money per call with no free tier and no local alternative" is.
 
-## Step 2: Design Scenarios from the Spec
+## Step 2: Design scenarios from the spec
 
-Decide WHAT to test. Each scenario = a spec requirement exercised through the actual production path.
+Decide WHAT to test. Each scenario = a spec requirement exercised through the actual production path. Seed coverage from the spec's acceptance criteria and the dossier's `risks`.
 
 - What journeys need testing beyond TDD unit tests?
 - Focus on: full request/response cycles through real I/O, multi-process coordination, startup/shutdown, error recovery
@@ -63,45 +65,49 @@ For each scenario, document:
 
 **Assertion depth rule.** Every expected outcome must assert on *observable user-visible behavior*, not internal state or existence checks. "The server responds with 200" is not E2E — "the server responds with the created resource including the auto-generated ID, and a subsequent GET returns the same resource" is. Each scenario must have at least one assertion that would catch a real regression: data corruption, wrong routing, missing side effects, broken state transitions.
 
-**Real-usage grounding.** Before finalizing scenarios, ask: "If this test passes but the feature is actually broken, what did I miss?" Every scenario must exercise a path that a real user would hit in their first 5 minutes of using the feature. If you can't describe the human action that triggers this path, the scenario is disconnected from real usage.
+**Real-usage grounding.** Before finalizing scenarios, ask: "If this test passes but the feature is actually broken, what did I miss?" Every scenario must exercise a path a real user would hit in their first 5 minutes of using the feature. If you can't describe the human action that triggers this path, the scenario is disconnected from real usage.
 
-## Step 3: Design Test Infrastructure
+Describe *what each scenario asserts and why* — the behavior, the boundary, the failure mode. Do **not** write the literal test code; the E2E implementer writes it.
+
+## Step 3: Design test infrastructure
 
 Plan the fixture architecture:
 
 - **Launch helper**: how tests start the real environment. Automated — no manual steps.
 - **Ready-wait strategy**: how to detect readiness (health check, window appeared, webview loaded, port opened). No `sleep()` — poll or wait for a signal. Specify the signal.
-- **Interaction helpers**: what helper functions/utilities tests need for driving the app through its real interfaces.
+- **Interaction helpers**: what helper functions tests need for driving the app through its real interfaces.
 - **Observation helpers**: how tests capture real outputs (screenshots, API responses, logs, accessibility state).
 - **Teardown strategy**: clean shutdown plan. Kill processes, delete temp files, close connections.
 - **Isolation approach**: how each test gets clean state. Fresh server, clean database, new session.
 
 **Specify a smoke test.** The first thing the E2E implementer should build: launch → wait for ready → one interaction → one assertion → tear down. Define it concretely.
 
-## Step 4: Visual Validation Strategy (when app has a UI)
+## Step 4: Visual validation strategy (when app has a UI)
 
 If the application has any visual interface, plan the visual validation approach:
 
-- **Which components/states need visual validation** — list each screen, panel, or view that was created or modified
-- **Capture strategy** — targeted, cropped screenshots per component (not full-window). Specify region/crop approach and scale factor (2x recommended).
+- **Which components/states need visual validation** — list each screen, panel, or view created or modified
+- **Capture strategy** — targeted, cropped screenshots per component (not full-window). Specify the region/crop approach and scale factor, grounded in the project's existing visual-test conventions.
 - **Golden sample inventory** — list every golden sample needed with descriptive names (e.g. `settings-panel-default.png`, `chat-empty-state.png`)
 - **Dual-path validation design** — golden image comparison (fast path) + LLM semantic validation (fallback). Specify:
-  - Pixel diff method and tolerance threshold
+  - That a pixel-diff method and a tolerance threshold must be chosen, citing the project's existing visual-test conventions for the actual values — leave the literal constants to the E2E stage
   - Visual checks per component (yes/no questions about specific visual properties)
-  - Negative assertions (known-false questions to verify LLM isn't rubber-stamping)
+  - Negative assertions (known-false questions to verify the LLM isn't rubber-stamping)
   - Auto-update policy for golden samples
-  - Rate limiting for LLM calls (10–15s base + jitter)
+  - That LLM calls must be rate-limited (and why), with the cadence taken from the project's conventions rather than a hardcoded value
 
 If the application has no visual interface, state this explicitly and skip.
 
 ## Plan Output
 
-Write the plan to the pipeline directory path provided by the orchestrator (e.g. `.atelier/pipelines/2026-02-25-auth-feature/e2e-plan.md`). If running standalone without orchestrator context, write to `.atelier/pipelines/YYYY-MM-DD-<feature>/e2e-plan.md`.
+Write the plan to the path the orchestrator assigns (e.g. `.atelier/pipelines/<id>/e2e-plan.md`).
 
 **Structure:**
 
 ```
 # E2E Test Plan: <feature>
+
+References: spec <path> · plan <path> · dossier <path>
 
 ## Environment
 [Launch, interact, observe, dependencies, constraints from Step 1]
@@ -116,12 +122,4 @@ Write the plan to the pipeline directory path provided by the orchestrator (e.g.
 [Strategy from Step 4]
 ```
 
-## Progress File
-
-After writing the plan, update the progress file in the pipeline directory (`progress.md`):
-
-1. Populate the `## Tasks` table with one row per scenario (all `[ ] pending`), plus infrastructure tasks (smoke test, fixture setup)
-2. Update the `## Summary` counts to match
-3. Append to `## Iteration Log`: `- **E2E Plan:** wrote <path>, N scenarios`
-
-If the progress file doesn't exist (standalone use), create it with the bare structure (`# Progress`, `## Summary`, `## Tasks`, `## Iteration Log`).
+Return the e2e-plan's path as your final message. If research reveals the planned E2E approach is genuinely infeasible (e.g. the host provides no programmatic launch path and no viable alternative), return a **stuck-report** instead: `{stuck:true, stage:"write_e2e_plan", attempted:[…], blocker:…, lastError:…, partialArtifacts:{…}}`.

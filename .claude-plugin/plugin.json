@@ -1,17 +1,7 @@
 {
   "name": "atelier",
-  "version": "0.1.0",
-  "description": "Atelier — 15-stage autonomous pipeline for software development. Brings the Atelier pipelines (Quick Plan, Task, Feature, Epic) to Claude Code as a plugin.",
+  "version": "0.2.0",
+  "description": "Atelier — skill-driven autonomous pipeline orchestrator for Claude Code. One smart orchestrator drives Plan/Task/Feature/Epic pipelines end-to-end: investigation-first speccing, blueprint planning, fan-out review, full autonomy with a single anti-yield guarantee.",
   "author": { "name": "Atelier" },
-  "license": "MIT",
-  "mcpServers": {
-    "atelier": {
-      "command": "node",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/server.js"],
-      "env": {
-        "ATELIER_CC_WORKSPACE": "${CLAUDE_PROJECT_DIR}",
-        "ATELIER_CC_ROOT": "${CLAUDE_PLUGIN_ROOT}"
-      }
-    }
-  }
+  "license": "MIT"
 }
