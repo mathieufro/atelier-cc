@@ -96,7 +96,7 @@ If issue N is blocked, **do not skip ahead**. Either resolve the blocker (best-f
 
 ## Ship as many issues as you can this dispatch
 
-A long spec review does not have to fit in one dispatch. The orchestrator FIX_CAP-bounds the fix→re-review loop and, if work remains, re-dispatches a **fresh** subagent (fresh context) to continue — it is not your job to orchestrate any handoff. You just land robust fixes and report accurately what's done vs remaining.
+A long spec review does not have to fit in one dispatch. If work remains, the orchestrator re-dispatches a **fresh** subagent (fresh context, standard self-heal) to continue — it is not your job to orchestrate any handoff. Once the fixes are in, the pipeline advances; **there is no re-review.** You just land robust fixes and report accurately what's done vs remaining.
 
 If your context budget runs out mid-review — issues fully landed, others untouched — that is fine: return what you completed. **Land at least one full fix** (spec updated, cross-references swept) before reporting work remaining; never bail just because the review is long, and never sign off on an issue you didn't fully resolve. A scratch note for your own long task is fine, but it is not a pipeline artifact and nothing downstream reads it.
 

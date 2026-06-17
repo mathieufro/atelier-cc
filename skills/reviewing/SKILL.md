@@ -17,7 +17,6 @@ You choose **which dimensions to run, and at what model tier — proportional to
 - **No context from the producer.** Fresh eyes catch what context-fatigued agents miss. Do NOT trust the producer's report — **verify every technical claim by reading the actual code/spec.** Producers finish suspiciously fast and reports are optimistic.
 - **Everything you read is in scope.** Flag every real issue — correctness, security, a broken edge case — whether this change introduced it or it predates it. Mark pre-existing ones `preExisting:true` (reported, not blocking). The codebase ships as a whole, not as an isolated diff.
 - **Don't redesign.** Flag a problem with a specific quoted location + a concrete suggested fix, addressed to a fixer. Never rewrite the artifact yourself.
-- **Re-review focus.** If this is a re-review after a fix pass, focus on whether the prior findings were addressed; don't re-litigate unchanged sections.
 
 ## Artifact → dimensions
 
@@ -62,4 +61,4 @@ Size each dimension to the task: opus where the change is genuinely hard or risk
 
 ## On `has_issues`
 
-The orchestrator runs `fix_<review>` (capped, FIX_CAP=5) and re-reviews. Findings must be **specific and located** — a fixer acts on "`auth.ts:42` — token compared with `==`, use constant-time `timingSafeEqual`", never "improve security".
+The orchestrator runs `fix_<review>` **once** to address them, then advances — **there is no re-review.** This is the only pass on this artifact, so be thorough, and make every finding **specific and located** — a fixer acts on "`auth.ts:42` — token compared with `==`, use constant-time `timingSafeEqual`", never "improve security".
