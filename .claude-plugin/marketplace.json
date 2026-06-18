@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
   "name": "atelier",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Local install marketplace for the atelier-cc workflow-era plugin.",
   "owner": {
     "name": "Atelier"
