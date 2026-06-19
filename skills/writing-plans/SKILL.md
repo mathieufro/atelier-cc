@@ -16,7 +16,7 @@ Read the **dossier** and the **spec**. Then explore the codebase areas you'll to
 
 1. **What** — the unit and its single responsibility.
 2. **How** — the interface/signatures, the data shapes, the exact files to create/modify (real paths), the **patterns to follow** (cite real files/conventions), what to **reuse**, and the **sequencing**. Name the seams where this wires into existing code.
-3. **Tests** — the specific test cases, the **edge cases that actually matter** here, and the acceptance bar. Describe *what each test asserts and why* — the behavior, the boundary, the failure mode — **not** the test code.
+3. **Tests** — the specific test cases, the **edge cases that actually matter** here, and the acceptance bar. Describe *what each test asserts and why* — the behavior, the boundary, the failure mode — **not** the test code. The implementer builds each task test-first (red → green), so frame the tests as the cycle the implementer will run: **name the expected failure-then-pass** — what fails before the code exists, what passes after. A task whose test cannot be run red at its point in the order (its harness/infra arrives later) is a TDD-ordering smell: either pull the harness earlier or split out a runnable red-green check now and mark the rest as a deferred integration test.
 4. **Not** — do **NOT** write the literal implementation or literal test code. Describe them precisely and let the implementer write them. (If you catch yourself pasting a full function body, stop — that's the implementer's job.)
 
 ## What the tests must be (so the implementer builds them right)
@@ -25,6 +25,7 @@ Read the **dossier** and the **spec**. Then explore the codebase areas you'll to
 - **Falsifiable** — ban vacuous assertions ("is defined", "truthy"). Every test must be able to fail on a real bug.
 - **Mock only at boundaries** — network, fs, time, randomness. Prefer the codebase's real test infra (temp dirs, in-memory stores) over mocks.
 - **One behavior per test**, parameterized across inputs where the logic repeats.
+- **Runnable red at its own task** — the implementer writes the test first and watches it fail before implementing. Order tasks so each one's test harness already exists when the task lands; don't defer a task's only test to infrastructure built many tasks later (that turns red-green into test-after).
 
 ## Edge cases — think adversarially per task
 
