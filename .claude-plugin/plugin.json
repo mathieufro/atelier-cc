@@ -1,7 +1,6 @@
 {
   "name": "atelier",
-  "version": "0.2.0",
-  "description": "Atelier — skill-driven autonomous pipeline orchestrator for Claude Code. One smart orchestrator drives Plan/Task/Feature/Epic pipelines end-to-end: investigation-first speccing, blueprint planning, fan-out review, full autonomy with a single anti-yield guarantee.",
+  "description": "Atelier — skill-driven autonomous pipeline orchestrator for Claude Code. One smart orchestrator drives Task/Feature/Epic pipelines end-to-end: investigation-first speccing, blueprint planning, fan-out review, full autonomy. Kept on-task by ledger-driven guarantees: an anti-yield + definition-of-done Stop gate, a PostToolUse heartbeat, and SessionStart re-grounding.",
   "author": { "name": "Atelier" },
   "license": "MIT"
 }
