@@ -19,6 +19,10 @@ In the spec, find the section titled **"Validation Protocol"**.
 - **Found and non-empty** → execute it (below).
 - **Found but `N/A`, or not found** → there is nothing executable to run. Write a one-line report noting "no validation protocol — nothing to execute" (or skip the report), then return a DONE-SIGNAL as your final message.
 
+## Required access — check it, never ask for it
+
+If the spec has a **Prerequisites / Required Access** section, read it first. For each item it names (a credential, an authenticated CLI like `glab`/`gh`/cloud login, a deploy target), run the stated check (e.g. `glab auth status`) before the commands that depend on it. If a prerequisite is **absent from the environment**, do **not** try to authenticate, mint, or substitute a credential, and do **not** ask the user — there is no user here. Record it as a failed step, finish the rest of the protocol you *can* run, and return a `NEEDS_ATTENTION` report whose Summary names the exact missing prerequisite (and the env var / CLI it should come from). The same applies if a validation command fails purely because of missing access rather than a real defect: that is a blocked prerequisite, not a code bug to "fix."
+
 ## Execute the protocol
 
 1. **Parse it.** Extract each step: the command to run, the success criteria (exit code, output pattern, file content), and any failure-diagnosis guidance.

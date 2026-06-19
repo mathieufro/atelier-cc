@@ -26,6 +26,8 @@ Task-tier means the scope is small enough that a senior engineer could hold the 
 
 Present the architecture in 200–300 word sections, validating each with the user. Cover: what components change, data flow, integration points, error handling, rejected alternatives. Briefer than Feature-mode brainstorming — just enough to make sound implementation decisions. Cite the real files and conventions you're building against (the dossier already surfaced many).
 
+**Before you finalize, elicit prerequisites — the last questions you get to ask.** Everything after this document is autonomous (`implement` → `review_code` → `validate`, including the e2e/integration tasks in your blueprint), and a firewall makes asking the user impossible once the pipeline advances. So if any of that work needs something only the user can provide — a **credential or secret**, an **authenticated CLI** (`glab`/`gh`/cloud login), a **deploy/publish target**, an **account/project id** — ask the user **now**, while the conversation is open, and record it in the **Prerequisites / Required Access** item below (what it is, where the stage reads it from, the check that confirms it — **never the secret value itself**). An un-elicited prerequisite becomes a hard pipeline failure downstream. Most focused changes need none — only ask when the change actually reaches outside the repo.
+
 ## 3. Write the spec-plan hybrid
 
 Write to the orchestrator-assigned path. The document has two major sections.
@@ -36,6 +38,7 @@ Write to the orchestrator-assigned path. The document has two major sections.
 - **Architecture and approach** — rationale for the chosen approach, rejected alternatives.
 - **Components and data flow** — what changes, how data moves, failure modes.
 - **Integration** — how the feature becomes reachable from existing entry points.
+- **Prerequisites / Required Access** — anything an autonomous stage needs that only the user provides (credential, authenticated CLI, deploy/publish target, account), as elicited above: what it is, which stage needs it, where the value lives (env var / secret-file path / pre-authed CLI — **never the value itself**), and the check that confirms it's present. Write "None" if the change stays inside the repo.
 
 ### Implementation Plan Section (the blueprint)
 

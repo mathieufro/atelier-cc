@@ -37,8 +37,10 @@ A component test rendered in jsdom with simulated messages is a unit test wearin
 ## Before Writing Any Code
 
 1. **Read the E2E plan** (path in your dispatch prompt) — understand the environment, scenarios, infrastructure design, and visual validation strategy.
-2. **Read the spec** (path in your dispatch prompt) — understand the acceptance criteria.
+2. **Read the spec** (path in your dispatch prompt) — understand the acceptance criteria, and the **Prerequisites / Required Access** section if present (credentials, authenticated CLIs, deploy targets the real environment needs).
 3. **Explore existing test infrastructure** — what's already in place that the plan builds on?
+
+**Required access — check it, never ask or mint it.** If booting the real environment needs access the spec's Prerequisites section names (a credential, a `glab`/`gh`/cloud login, a deploy target), run its check first. If it's absent, do **not** try to authenticate, mint, or substitute a credential, and do **not** address the human — there is no user here. Finish every scenario you *can* run without it, then return a **stuck-report** (or partial report) whose `blocker` names the exact missing prerequisite and where it should come from. This is a blocked prerequisite, not an environment you failed to automate.
 
 ## Step 1: Build the Test Infrastructure
 

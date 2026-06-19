@@ -90,6 +90,17 @@ After the design is agreed upon but before writing the spec, systematically veri
 
 Surface anything this sweep catches to the user before writing the spec.
 
+**Phase 5 — Prerequisites & required access (the last questions you get to ask):**
+
+Everything after this spec is **fully autonomous** — the implement, validate, e2e, and any deploy/publish stages run with no human in the loop, and a firewall makes asking the user impossible once the pipeline advances. So this is the moment to surface anything those stages will need that **only the user can provide**. Walk the design and ask: to build, validate, deploy, or publish this, does any stage need —
+
+- a **credential or secret** (API token, DB password, signing key),
+- a **CLI already authenticated** (`glab`/`gh` login, `aws`/`scaleway`/cloud auth, `docker login`),
+- a **deploy/publish target** (registry, project id, region, bucket, repo to push to),
+- a **paid or external resource** (an account, a provisioned service)?
+
+For each one, **ask the user now**, while the conversation is open: confirm whether it already exists in the environment (e.g. "is `glab` authenticated for the target group?") and, if not, what they'll set up. **Do not put secret values in the spec** — record only *what* is needed, *where the stage will read it from* (env var name, secret-file path, pre-authed CLI), and *how the stage verifies its presence* (the check command). An un-elicited prerequisite becomes a hard pipeline failure downstream, because no stage can stop to ask for it.
+
 ## Spec Structure
 
 The output is a high-level engineering design — no code, no file paths, no implementation details. It tells the planner *what* to build and *why*, not *how* at the code level. Clear enough to plan from without ambiguity, but not so detailed that it prescribes specific code.
@@ -118,7 +129,9 @@ The output is a high-level engineering design — no code, no file paths, no imp
 
 **Testing strategy.** What kinds of tests, what to cover, critical scenarios. Not test code, but enough for a planner to know what assertions matter.
 
-**Validation protocol.** How to verify the implementation works after it's built — consumed by the *validate stage agent*, not the planner. For each validation step: the exact command to run (copy-pasteable, not "run the tests"), what success looks like (exit code 0, specific output pattern, file content), and how to interpret failure output for diagnosis. If the only validation is running the test suite, write the literal command and what a passing run looks like. If the feature cannot be validated with executable commands (pure documentation, config-only changes, refactoring with no behavioral change), write "N/A — [reason]." The validate stage executes this protocol literally — concrete commands only.
+**Prerequisites / Required Access.** Everything an autonomous stage needs that only the user provides — credentials, secrets, authenticated CLIs (`glab`/`gh`/cloud login), deploy/publish targets, accounts, paid resources — as surfaced in Phase 5. For each: *what* it is, *which stage* needs it, *where the value lives* (env var name, secret-file path, pre-authed CLI — **never the secret value itself**), and *the check* a stage runs to confirm it's present before relying on it (e.g. `glab auth status`). If the feature needs none, write "None." This section is what lets the pipeline run unattended: anything missing here will fail a downstream stage rather than pause for a question.
+
+**Validation protocol.** How to verify the implementation works after it's built — consumed by the *validate stage agent*, not the planner. If a validation or deploy command depends on access listed above, reference it by name (env var / pre-authed CLI) so the validate stage knows the dependency rather than guessing. For each validation step: the exact command to run (copy-pasteable, not "run the tests"), what success looks like (exit code 0, specific output pattern, file content), and how to interpret failure output for diagnosis. If the only validation is running the test suite, write the literal command and what a passing run looks like. If the feature cannot be validated with executable commands (pure documentation, config-only changes, refactoring with no behavioral change), write "N/A — [reason]." The validate stage executes this protocol literally — concrete commands only.
 
 **Visual structure (UI-aware only).** Layout skeleton: what goes where, spatial relationships, grouping, hierarchy. Key component states: empty, loading, error, populated, overflow. Reference UI if one exists. Not CSS or pixels — enough for a planner to know spatial intent without guessing.
 
