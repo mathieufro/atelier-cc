@@ -33,10 +33,23 @@ ask() { printf '%s' "$1" | bash "$HOOK"; }
   [ -z "$output" ]
 }
 
-@test "awaiting:workflow → ALLOW (in-flight fan-out)" {
+@test "awaiting:workflow → DENY (no pipeline state makes asking-during-workflow legal; Stop allows the yield, this does not)" {
   mkstate sess-A running '"workflow"'
   run ask "{\"session_id\":\"sess-A\",\"cwd\":\"$TMP\",\"tool_name\":\"AskUserQuestion\"}"
-  [ -z "$output" ]
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"deny"'* ]]
+}
+
+@test "REGRESSION: fan-out just returned, orchestrator asks before clearing awaiting → DENY (the real leak: review_code returns, awaiting still 'workflow', orchestrator asks the acceptance-bar question)" {
+  # review_code [FO]: orchestrator set awaiting:"workflow" + yielded; the Workflow
+  # completed and re-invoked it; it read the review result and reached for
+  # AskUserQuestion BEFORE writing awaiting:null. The OLD allow-list (user|workflow)
+  # let this through. It must now be denied, with the fix-to-meet-spec guidance.
+  mkstate sess-A running '"workflow"'
+  run ask "{\"session_id\":\"sess-A\",\"cwd\":\"$TMP\",\"tool_name\":\"AskUserQuestion\"}"
+  [[ "$output" == *'"deny"'* ]]
+  [[ "$output" == *"MEET THE SPEC"* ]]
+  [[ "$output" == *"acceptance bar"* ]]
 }
 
 @test "status:complete → ALLOW (terminal)" {
