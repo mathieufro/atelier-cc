@@ -97,6 +97,8 @@ Each check is a yes/no question about a specific visual property. The LLM return
 
 **Auto-update golden samples.** When no golden exists and LLM validation passes, save the screenshot as the new golden reference automatically. When golden comparison fails but LLM validation passes, update the golden — the UI changed intentionally. When LLM validation fails, the test fails — something is actually wrong.
 
+> **Exception — `autonomous-epic` pipelines.** Do NOT auto-update goldens here. LLM validation answers only the plan's visual checks; a gestalt charter additionally asks the closed-world questions (is anything here that should NOT be, does this contradict a sibling surface, is this a plausible value). A frame can pass the former while carrying a defect the latter would catch, and auto-update would freeze that defect into the baseline permanently — every later run then compares against a known-bad reference and reports green. In these pipelines a golden is blessed ONLY from a frame that passed a gestalt judgment, recorded with the judging run id (see `gestalt-qa`). On a failing comparison with no such blessing, report the diff and let the `gestalt` stage adjudicate.
+
 **Negative assertions.** Implement the negative assertions from the plan — sanity checks that deliberately ask wrong questions to verify the LLM isn't rubber-stamping everything.
 
 **Rate limiting.** Add delay between LLM calls (10–15s base + jitter) to avoid API throttling. Make the delay configurable via environment variable.

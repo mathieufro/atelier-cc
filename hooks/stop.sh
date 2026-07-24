@@ -77,12 +77,13 @@ fi
 if [ "$awaiting" = "workflow" ]; then
   awf="$pdir/.await-since"
   now="$(date +%s)"
+  win="$(stale_secs_for_type "$ptype")"
   if [ -f "$awf" ]; then
     since="$(cat "$awf" 2>/dev/null || printf '%s' "$now")"
     [[ "$since" =~ ^[0-9]+$ ]] || since="$now"
-    if [ "$((now - since))" -gt "$WORKFLOW_STALE_SECS" ]; then
+    if [ "$((now - since))" -gt "$win" ]; then
       rm -f "$awf" 2>/dev/null || true        # re-arm the clock for the next genuine wait
-      block "STALE WORKFLOW WAIT — pipeline ${pid} (${ptype}) has been awaiting:\"workflow\" for >$((WORKFLOW_STALE_SECS / 60))min at phase '${phase}'. The fan-out has almost certainly returned (or never launched). Collect its result — or relaunch it — then set awaiting:null and keep driving. $(ledger_line "$sp")."
+      block "STALE WORKFLOW WAIT — pipeline ${pid} (${ptype}) has been awaiting:\"workflow\" for >$((win / 60))min at phase '${phase}'. CHECK THE WORKFLOW'S RESULT FIRST — if it is still running, just keep waiting; only relaunch if it is genuinely dead or never launched. Then set awaiting:null and keep driving. $(ledger_line "$sp")."
     fi
   else
     printf '%s\n' "$now" > "$awf" 2>/dev/null || true   # first sight → arm the clock

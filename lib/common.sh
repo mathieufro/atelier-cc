@@ -102,6 +102,20 @@ find_any_running_pipeline() {
 # Tunables (env-overridable for tests).
 : "${HEARTBEAT_EVERY:=12}"        # PostToolUse heartbeat cadence, in tool calls
 : "${WORKFLOW_STALE_SECS:=1800}"  # awaiting:"workflow" treated as stranded after this
+: "${WORKFLOW_STALE_SECS_EPIC:=5400}"  # ...but epic-scale fan-outs legitimately run longer
+
+# Staleness window for an `awaiting:"workflow"` yield, by pipeline type. The 30-min
+# default is right for a task/feature review fan-out and WRONG for autonomous-epic,
+# whose fan-outs author or review a whole blueprint set (hundreds of KB across a dozen
+# agents) and routinely run past it. A false STALE is not harmless: stop.sh's reason
+# tells the orchestrator the fan-out "has almost certainly returned (or never launched)"
+# and invites a relaunch — i.e. it duplicates a workflow that is still running.
+stale_secs_for_type() {
+  case "$1" in
+    autonomous-epic) printf '%s' "$WORKFLOW_STALE_SECS_EPIC" ;;
+    *)               printf '%s' "$WORKFLOW_STALE_SECS" ;;
+  esac
+}
 
 # Canonical stage flow per pipeline type — the SINGLE source of truth for "what
 # stages a pipeline must walk", mirroring commands/atelier.md §3. Consumed by
@@ -112,6 +126,20 @@ flow_for_type() {
     task)    printf '%s' "task_brainstorm review_task implement review_code validate" ;;
     feature) printf '%s' "brainstorm review_spec write_plan review_plan implement review_code simplify e2e_gate write_e2e_plan review_e2e_plan e2e validate" ;;
     epic)    printf '%s' "brainstorm review_spec brainstorm_roadmap review_roadmap validate" ;;
+    # autonomous-epic = a deep multipart spec + roadmap + per-phase blueprints,
+    # then AUTONOMOUS execution of that roadmap phase by phase. The heavy speccing
+    # head is deliberately many stages rather than one mega-stage: each stage
+    # boundary is a ledger write, and `research` / `write_spec` / `write_blueprints`
+    # are the biggest context sinks in the pipeline (this mirrors the stage list a
+    # real epic of this shape actually used).
+    #
+    # `execute_roadmap` is a PLACEHOLDER. Once the blueprints are reviewed the
+    # orchestrator rewrites plan[] in state.json, expanding it into `ws_baseline`
+    # plus one `ws_<nn>_<slug>` stage per roadmap phase (atelier.md §3a). This
+    # canonical list is only the pre-expansion fallback for a state.json with no
+    # plan[]; after expansion the persisted plan[] is authoritative. `validate`
+    # stays last either way, so the terminal-stage completion gate still applies.
+    autonomous-epic) printf '%s' "research brainstorm write_spec review_spec brainstorm_roadmap review_roadmap write_blueprints review_blueprints execute_roadmap gestalt validate" ;;
     *)       printf '' ;;
   esac
 }

@@ -38,7 +38,7 @@ First decide the branch from `$ARGUMENTS`:
 
 1. **Gather ids.** `Bash`: `echo "$CLAUDE_CODE_SESSION_ID|$(date +%F)|$(openssl rand -hex 2)"`. (session id | date | 4-hex suffix.)
 2. **Refuse a second running pipeline** in this session: if `.atelier/pipelines/*/state.json` already has one with `sourceSessionId == this session && status=="running"`, tell the user and stop. One running pipeline per session.
-3. **Classify the type** — infer from the task and **confirm with one AskUserQuestion** (options = `task` / `feature` / `epic`, with your recommendation first). Guidance: `task` = a focused change, **bug-fix**, or small feature — the lean full build (one interactive blueprint session → build); `feature` = a full feature (separate spec → plan → build → dedicated e2e → simplify); `epic` = a multi-feature initiative (spec + roadmap, no code).
+3. **Classify the type** — infer from the task and **confirm with one AskUserQuestion** (options = `task` / `feature` / `epic` / `autonomous-epic`, with your recommendation first). Guidance: `task` = a focused change, **bug-fix**, or small feature — the lean full build (one interactive blueprint session → build); `feature` = a full feature (separate spec → plan → build → dedicated e2e → simplify); `epic` = a multi-feature initiative (spec + roadmap, **no code**); `autonomous-epic` = the same speccing head plus per-phase blueprints and then **autonomous execution of the whole roadmap** — a multi-day/multi-week run. Pick `autonomous-epic` only when the user has actually asked to build the epic, not merely plan it.
 4. **Worktree?** One AskUserQuestion: run in a separate git **worktree** (isolated branch) or **in-tree**. If worktree, create it (`Bash: git worktree add .atelier/worktrees/<id> -b atelier/<id>`) and record its absolute path.
 5. **Create the pipeline.** Compute `id = <date>-<slug>-<4hex>` where `slug` = first ~5 task words, kebab-cased/lowercased, ≤40 chars (regenerate the 4-hex if the dir already exists). `Bash: mkdir -p .atelier/pipelines/<id>`. Then write `state.json` (one `Write` call) with: `id`, `type`, `task`, `workspaceRoot` (abs main-workspace path), `sourceSessionId`, `status:"running"`, `awaiting:null`, `phase` = the first flow stage, `plan` = the ordered stage list for this `type` (copy the §3 flow **verbatim** — this is your persisted definition-of-done; its last entry is the terminal stage the Stop hook gates `complete` on), `done:[]`, `attempts:{}`, `steps:0`, `artifacts:{}`, `worktree` (path or null), `failure:null`, `updatedAt`.
 6. **Fall straight into the drive loop (§2).** Do NOT yield.
@@ -72,10 +72,37 @@ After any compaction/restart you are re-grounded by the hook's block reason: re-
 - **task:** `task_brainstorm [I]` (investigation → spec-plan **blueprint** hybrid, **incl. e2e tests**) → `review_task [FO]` → `implement [A]` → `review_code [FO]` → `validate [A]`  *(the lean full-build path — bug-fixes + small features; no separate write_plan or e2e stage. For a trivial/one-line change, right-size `review_task` down to a quick check or skip it; run the full review for a real small feature.)*
 - **feature:** `brainstorm [I]` (investigation) → `review_spec [FO]` → `write_plan [A]` (blueprint) → `review_plan [FO]` → `implement [A]` → `review_code [FO]` → `simplify [A]` → `e2e_gate [A]` → `write_e2e_plan [A]` → `review_e2e_plan [FO]` → `e2e [A]` → `validate [A]`
 - **epic:** `brainstorm [I]` (investigation) → `review_spec [FO]` → `brainstorm_roadmap [I]` → `review_roadmap [FO]` → `validate [A]` (docs-level: roadmap covers the spec)
+- **autonomous-epic:** `research [FO]` → `brainstorm [I]` → `write_spec [A]` → `review_spec [FO]` → `brainstorm_roadmap [I]` → `review_roadmap [FO]` → `write_blueprints [FO]` → `review_blueprints [FO]` → **`execute_roadmap` (placeholder — expanded, see §3a)** → `gestalt [A]` → `validate [A]`
 
-Stage → skill: `task_brainstorm`→`task-brainstorming`, `brainstorm`→`brainstorming-feature`, `brainstorm` (epic)→`brainstorming-epic`, `brainstorm_roadmap`→`brainstorming-roadmap`, `write_plan`→`writing-plans`, `write_e2e_plan`→`writing-e2e-plans`, all `review_*`→`reviewing` (parameterized by artifact), `implement`→`implementing-plans`, `e2e_gate`→`e2e-gating`, `e2e`→`e2e-validation`, `simplify`→`simplifying-implementation`, `validate`→`validating`, `fix_*`→`fixing` (`fix_*_spec`→`fixing-specs`).
+Stage → skill: `task_brainstorm`→`task-brainstorming`, `brainstorm`→`brainstorming-feature`, `brainstorm` (epic + autonomous-epic)→`brainstorming-epic`, `research`/`write_spec`→`speccing-epic-multipart`, `brainstorm_roadmap`→`brainstorming-roadmap`, `write_plan`→`writing-plans`, `write_blueprints`→`writing-blueprints`, `write_e2e_plan`→`writing-e2e-plans`, all `review_*`→`reviewing` (parameterized by artifact), `implement`→`implementing-plans`, `ws_*`→`executing-workstreams`, `gestalt`→`gestalt-qa`, `e2e_gate`→`e2e-gating`, `e2e`→`e2e-validation`, `simplify`→`simplifying-implementation`, `validate`→`validating`, `fix_*`→`fixing` (`fix_*_spec`→`fixing-specs`).
 
 `e2e_gate` is binary: if e2e isn't warranted for what was built, skip straight to `validate`.
+
+### 3a. `autonomous-epic`: expanding `execute_roadmap`
+
+`execute_roadmap` is a placeholder, never executed and never entered into `done[]`. **Once
+`review_blueprints` completes**, rewrite `plan[]` in the same `state.json` write that records
+that stage done, replacing the single `execute_roadmap` entry with:
+
+`ws_baseline`, then one `ws_<nn>_<slug>` per roadmap phase, in roadmap order.
+
+Keep `gestalt` and `validate` last, in that order — `validate` must stay `plan[-1]`. Stage ids
+must be unique and shell-word-safe (`[a-z0-9_]+`); the ledger line word-splits the joined plan.
+Expand **once**: record `attempts.plan_expanded = true` and never re-expand on resume.
+
+`ws_baseline` is the mandatory first execution stage — establish the build, run the full suite,
+and record the **known-failure baseline** before any feature work. Without it, no later stage can
+tell an inherited failure from a regression it just caused.
+
+Each `ws_*` stage is one roadmap phase, run per `executing-workstreams`: dispatch each blueprint
+task to a subagent, verify adversarially with a fresh skeptic, land it, write the ledger. **The
+work happens in subagent contexts, not yours** — that is what makes a 40-task phase survivable.
+Expect to be compacted mid-phase; `impl/PROGRESS.md` is what makes that a non-event.
+
+Create `impl/PROGRESS.md` **at pipeline creation**, not at `ws_baseline`, with a row per planning
+stage. The planning head (`research` → `review_blueprints`) is the most expensive part of the
+pipeline and otherwise has only stage-granular `done[]` to resume from. **A stage whose output
+artifacts already exist on disk is reconciled with, not re-run.**
 
 ---
 
@@ -112,6 +139,15 @@ When a subagent returns a **stuck-report**:
 3. **Re-dispatch a FRESH subagent** with the added context (never resume a wedged one). Bump the persisted counter.
 
 **Ladder (all counters in `state.json.attempts`):** 2 sonnet failures on a stage → switch that stage to **opus**; **opus failures ≤ OPUS_CAP = 3** → then `status:"failed"` with the stuck-report as the `failure` artifact. **Global backstop:** `steps` ≤ **STEP_BUDGET = 150** per pipeline → `failed`. These bounds are persisted because compaction erases in-context counts — always read the current counter from `state.json` before deciding, never from memory.
+
+**`autonomous-epic` exception.** Inside a `ws_*` stage, count attempts **per task**, keyed
+`attempts["<ws_stage>:<task_id>"]` — the stage-keyed ladder above does not apply. A `ws_` stage
+holds 25–40 independent tasks; two unrelated task failures say nothing about the phase, and
+applying the stage-keyed rule would escalate (or fail) a whole phase over them. Per task: 2
+subagent rounds, then the orchestrator implements it directly. `STEP_BUDGET` likewise does not
+bind this type at 150 — an epic is hundreds of task iterations by design; scale it to the
+expanded plan and treat exhaustion as a checkpoint to report, not a `failed` pipeline, since the
+work is committed and resumable.
 
 ---
 
