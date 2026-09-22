@@ -13,7 +13,7 @@ setup() {
 teardown() { rm -rf "$TMP"; }
 
 mkstate() { # <sourceSessionId> <status>
-  printf '{"id":"p1","type":"feature","task":"Build the format moat","sourceSessionId":"%s","status":"%s","awaiting":null,"phase":"review_code","done":["brainstorm","implement"]}\n' \
+  printf '{"id":"p1","rung":2,"task":"Build the format moat","sourceSessionId":"%s","status":"%s","awaiting":null,"phase":"execute","done":["frame","brainstorm","spec","review"]}\n' \
     "$1" "$2" > "$SP"
 }
 drive() { printf '%s' "$1" | bash "$HOOK"; }
@@ -27,7 +27,8 @@ drive() { printf '%s' "$1" | bash "$HOOK"; }
   [[ "$output" == *"compact"* ]]
   [[ "$output" == *"Build the format moat"* ]]
   [[ "$output" == *"commands/atelier.md"* ]]
-  [[ "$output" == *"remaining="* ]]
+  [[ "$output" == *"remaining=[execute,validate,handoff]"* ]]
+  [[ "$output" == *"PROGRESS.md"* ]]
 }
 
 @test "owned + running on resume → re-ground names the resume source" {

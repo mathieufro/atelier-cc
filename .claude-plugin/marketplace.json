@@ -1,15 +1,15 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
   "name": "atelier",
-  "version": "0.2.0",
-  "description": "Local install marketplace for the atelier-cc workflow-era plugin.",
+  "version": "0.3.0",
+  "description": "Local install marketplace for the atelier-cc plugin (single flow, dynamic depth).",
   "owner": {
     "name": "Atelier"
   },
   "plugins": [
     {
       "name": "atelier",
-      "description": "Atelier — skill-driven autonomous pipeline orchestrator (Task / Feature / Epic): investigation-first speccing, blueprint planning, fan-out review, full autonomy.",
+      "description": "Atelier — one flow with dynamic depth: frame → brainstorm → spec → review → execute → validate → handoff, at the rung the task warrants; targeted delegation, cheap-model sweeps, fresh skeptics per batch, artifact proof boards, ledger-driven hooks.",
       "source": "./",
       "category": "development"
     }

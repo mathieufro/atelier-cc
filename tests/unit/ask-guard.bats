@@ -16,7 +16,7 @@ setup() {
 teardown() { rm -rf "$TMP"; }
 
 mkstate() { # <sourceSessionId> <status> <awaiting-json>
-  printf '{"id":"p1","type":"feature","sourceSessionId":"%s","status":"%s","awaiting":%s,"phase":"write_plan"}\n' "$1" "$2" "$3" > "$SP"
+  printf '{"id":"p1","rung":2,"sourceSessionId":"%s","status":"%s","awaiting":%s,"phase":"spec"}\n' "$1" "$2" "$3" > "$SP"
 }
 ask() { printf '%s' "$1" | bash "$HOOK"; }
 
@@ -27,7 +27,7 @@ ask() { printf '%s' "$1" | bash "$HOOK"; }
   [[ "$output" == *'"deny"'* ]]
 }
 
-@test "awaiting:user → ALLOW (legitimate [I] design conversation)" {
+@test "awaiting:user → ALLOW (Brainstorm, the one interactive phase)" {
   mkstate sess-A running '"user"'
   run ask "{\"session_id\":\"sess-A\",\"cwd\":\"$TMP\",\"tool_name\":\"AskUserQuestion\"}"
   [ -z "$output" ]
@@ -40,7 +40,7 @@ ask() { printf '%s' "$1" | bash "$HOOK"; }
   [[ "$output" == *'"deny"'* ]]
 }
 
-@test "REGRESSION: fan-out just returned, orchestrator asks before clearing awaiting → DENY (the real leak: review_code returns, awaiting still 'workflow', orchestrator asks the acceptance-bar question)" {
+@test "REGRESSION: fan-out just returned, orchestrator asks before clearing awaiting → DENY (the real leak: a review fan-out returns, awaiting still 'workflow', orchestrator asks the acceptance-bar question)" {
   # review_code [FO]: orchestrator set awaiting:"workflow" + yielded; the Workflow
   # completed and re-invoked it; it read the review result and reached for
   # AskUserQuestion BEFORE writing awaiting:null. The OLD allow-list (user|workflow)
@@ -70,7 +70,7 @@ ask() { printf '%s' "$1" | bash "$HOOK"; }
   [ -z "$output" ]
 }
 
-@test "no owned running pipeline → ALLOW (the §1a classify/worktree questions run before state.json exists)" {
+@test "no owned running pipeline → ALLOW (Frame runs before state.json exists)" {
   rm -rf "$TMP/.atelier"
   mkdir -p "$TMP/.git"
   run ask "{\"session_id\":\"sess-A\",\"cwd\":\"$TMP\",\"tool_name\":\"AskUserQuestion\"}"
@@ -81,11 +81,17 @@ ask() { printf '%s' "$1" | bash "$HOOK"; }
   mkstate sess-A running null
   run ask "{\"session_id\":\"sess-A\",\"cwd\":\"$TMP\",\"tool_name\":\"AskUserQuestion\"}"
   [[ "$output" == *"p1"* ]]
-  [[ "$output" == *"write_plan"* ]]
+  [[ "$output" == *"spec"* ]]
   # primary instruction is default-and-advance, not bail
   [[ "$output" == *"sensible default"* ]]
   [[ "$output" == *"LAST RESORT"* ]]
   # fail is the rare last resort, and it names the prerequisite escape hatch
   [[ "$output" == *"Prerequisites"* ]]
   [[ "$output" == *'failed'* ]]
+}
+
+@test "legacy typed pipeline (no rung) → still DENIED mid-autonomous" {
+  printf '{"id":"p1","type":"feature","sourceSessionId":"sess-A","status":"running","awaiting":null,"phase":"implement"}\n' > "$SP"
+  run ask "{\"session_id\":\"sess-A\",\"cwd\":\"$TMP\",\"tool_name\":\"AskUserQuestion\"}"
+  [[ "$output" == *'"deny"'* ]]
 }

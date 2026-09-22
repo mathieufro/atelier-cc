@@ -1,8 +1,28 @@
 # atelier-cc
 
-[Atelier](https://github.com/mathieufro/atelier) as a Claude Code plugin. You describe what you want; one orchestrator takes it through investigation, spec, plan, implementation, independent review, simplification and tests, and only stops to talk to you during design.
+A Claude Code plugin that runs software work as one flow with dynamic depth. You describe
+the task; a strong orchestrator walks the same seven phases every time, at the depth the
+task warrants:
 
-It is not a chat loop. It is a disciplined engineering process, run by an agent that is not allowed to bail out.
+```
+frame → brainstorm → spec → review → execute → validate → handoff
+```
+
+A one-line fix walks it in three short steps. An epic climbs it fully: a multipart spec, a
+roadmap, per-phase plans written when each phase starts, waves of delegated tasks verified
+by a fresh skeptic per batch, gestalt gates, proof boards the owner judges last, and a
+literal completion promise. The rung on the ladder (R0 trivial to R4 epic) is picked at
+Frame from five signals and re-checked at every phase boundary.
+
+Design note: [docs/design.md](docs/design.md). Guideline: [docs/precepts.md](docs/precepts.md).
+Migration from the previous pipeline types: [docs/migration.md](docs/migration.md).
+
+## Requirements
+
+- Bash 4+ (`brew install bash` on macOS), `jq`
+- Claude Code with hooks and slash commands
+- Python 3 for the board generator; `sips` and `ffmpeg` when boards carry images or audio
+- The `gestalt` plugin for walks on user-visible surfaces (optional; Validate calls it)
 
 ## Install
 
@@ -11,73 +31,50 @@ It is not a chat loop. It is a disciplined engineering process, run by an agent 
 /plugin install atelier@atelier
 ```
 
-Requirements: Claude Code with plugin support, `jq`, and Bash 4 or later (macOS ships 3.2, `brew install bash`). [Strobe](https://github.com/mathieufro/strobe) is recommended: the implement and e2e stages use it for runtime evidence instead of guessing.
-
 ## Use
 
-```
-/atelier "add SAML SSO to the auth service"
-```
+- `/atelier "<task>"` starts a run. Frame writes a brief with the rung and a budget; Brainstorm
+  is a normal conversation, one question per turn, always with a recommendation; everything
+  after the approved spec runs unattended.
+- `/atelier resume <id>` continues an idle or failed run, `/atelier status` lists this
+  workspace's runs, `/atelier abort <id>` stops one. One running run per session.
+- Artifacts land in `.atelier/pipelines/<id>/`: `brief.md`, `spec.md`, `plan.md`,
+  `reviews/`, `LOOP-BRIEF.md`, `PROGRESS.md`, `gates/`, `board/`, `validation.md`,
+  `handoff.md`.
 
-The orchestrator confirms the pipeline type and whether to work in a git worktree, then drives. Design stages are a normal conversation, one question at a time, each opening with a recommendation. Everything after design runs unattended. Artifacts land in `.atelier/pipelines/<id>/`.
+## What keeps a long run honest
 
-| Command | What it does |
-|---|---|
-| `/atelier "<task>"` | Start a pipeline |
-| `/atelier resume <id or description>` | Continue an idle or failed pipeline |
-| `/atelier status` | List this workspace's pipelines |
-| `/atelier abort <id>` | Stop one |
+- **Stop hook**: no yield mid-autonomous execution, no premature complete (the terminal phase
+  is `handoff`), a stale fan-out wait is flagged.
+- **PostToolUse heartbeat**: task and ledger re-shown every dozen tool calls.
+- **SessionStart**: re-grounding after compaction or resume.
+- **Ask-guard**: user questions are denied outside Brainstorm; a decision only the owner can
+  make becomes a gate file and the run continues around it.
 
-One running pipeline per Claude Code session. Open more sessions to run more.
-
-## Pipelines
-
-| Type | Reach for it when | Stages |
-|---|---|---|
-| **task** | A bug fix or a small feature you can hold in your head | blueprint (interactive) -> review -> implement -> code review -> validate |
-| **feature** | One concrete deliverable that deserves a separate spec and plan | brainstorm (interactive) -> spec review -> plan -> plan review -> implement -> code review -> simplify -> e2e gate -> e2e plan -> e2e review -> e2e -> validate |
-| **epic** | A multi-feature initiative you want scoped, not built | brainstorm -> spec review -> roadmap (interactive) -> roadmap review -> validate |
-| **autonomous-epic** | The same, then build the whole roadmap without you | research -> brainstorm -> spec -> spec review -> roadmap -> roadmap review -> blueprints -> blueprint review -> execute every phase -> gestalt QA -> validate |
-
-Every speccing stage opens with an investigation of the codebase, so the conversation starts oriented instead of blind. Reviews are fan-outs of fresh-context agents; a review that finds issues triggers one fix pass, then the pipeline moves on. The terminal `validate` stage is the final net.
-
-## What keeps it honest
-
-The orchestrator is a single long-running agent, and long-running agents drift. Four hooks and a small ledger keep it on task:
-
-- **`state.json`** is the per-pipeline ledger: type, stage list, what is done, retry counters, what the orchestrator is waiting on. The orchestrator is its only writer.
-- **Stop hook.** While a pipeline is running and not waiting on you, the orchestrator is not allowed to end its turn. It also refuses a premature "complete": the pipeline is done only when its terminal stage is done.
-- **AskUserQuestion guard.** During autonomous execution, asking the user is hard-denied. The orchestrator takes the sensible default and keeps driving; `failed` is reserved for a genuine blocker such as a missing credential.
-- **PostToolUse heartbeat.** Every dozen or so tool calls, the task and the remaining stages are re-shown from the ledger, not from the agent's decaying memory.
-- **SessionStart re-grounding.** After compaction or a resume, the orchestrator is re-anchored on the ledger before it does anything.
-
-Credentials, accounts and deploy targets are collected during speccing, in the spec's prerequisites section, so the autonomous half never has to stop for them.
+All four read `state.json` (id, rung, phase, plan, done, status, awaiting) and never write it.
 
 ## Layout
 
 ```
-atelier-cc/
-  .claude-plugin/      plugin and marketplace manifests
-  commands/atelier.md  the orchestrator: classification, drive loop, flows, model allocation
-  skills/              18 stage skills (brainstorming, planning, reviewing, implementing, e2e, gestalt QA, ...)
-  hooks/               stop, ask-guard, post-tool-use, session-start
-  lib/common.sh        shared shell helpers
-  tests/               bats unit tests for the hooks
+commands/atelier.md      the driver: invariants, Frame, the drive table, finish
+skills/                  brainstorming · speccing · reviewing · executing · validating · boards
+docs/                    design.md · precepts.md · migration.md
+scripts/proof-board.py   builds an owner-facing board from a catalog and proof records
+hooks/, lib/common.sh    the four hooks and their shared primitives
+tests/unit/*.bats        hook tests (bats tests/unit)
 ```
-
-Skills are byte-mirrored from the Atelier repository; the two projects share one methodology.
 
 ## Development
 
 ```bash
-git submodule update --init          # vendored bats-core
-tests/bats/bin/bats tests/unit
+bats tests/unit          # or tests/bats/bin/bats after git submodule update --init
 ```
 
 ## Related
 
 - [atelier](https://github.com/mathieufro/atelier): the VS Code version, with its own server and multi-backend support.
-- [strobe](https://github.com/mathieufro/strobe): the runtime debugger the implement and e2e stages rely on.
+- [strobe](https://github.com/mathieufro/strobe): the runtime debugger Execute and Validate lean on for evidence.
+- [gestalt](https://github.com/mathieufro/gestalt): the walk Validate calls on user-visible surfaces.
 
 ## License
 

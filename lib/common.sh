@@ -97,63 +97,56 @@ find_any_running_pipeline() {
 # ---------------------------------------------------------------------------
 # Definition-of-done + reminder primitives (shared by stop / heartbeat /
 # session-start hooks). All read state.json; none write it.
+#
+# Rung/phase are the vocabulary of the single flow; a legacy pipeline may still
+# carry `type` and a typed plan[] — both are honoured, never migrated by a hook.
 # ---------------------------------------------------------------------------
 
 # Tunables (env-overridable for tests).
 : "${HEARTBEAT_EVERY:=12}"        # PostToolUse heartbeat cadence, in tool calls
 : "${WORKFLOW_STALE_SECS:=1800}"  # awaiting:"workflow" treated as stranded after this
-: "${WORKFLOW_STALE_SECS_EPIC:=5400}"  # ...but epic-scale fan-outs legitimately run longer
+: "${WORKFLOW_STALE_SECS_EPIC:=5400}"  # ...but epic-rung fan-outs legitimately run longer
 
-# Staleness window for an `awaiting:"workflow"` yield, by pipeline type. The 30-min
-# default is right for a task/feature review fan-out and WRONG for autonomous-epic,
-# whose fan-outs author or review a whole blueprint set (hundreds of KB across a dozen
-# agents) and routinely run past it. A false STALE is not harmless: stop.sh's reason
-# tells the orchestrator the fan-out "has almost certainly returned (or never launched)"
-# and invites a relaunch — i.e. it duplicates a workflow that is still running.
-stale_secs_for_type() {
-  case "$1" in
-    autonomous-epic) printf '%s' "$WORKFLOW_STALE_SECS_EPIC" ;;
-    *)               printf '%s' "$WORKFLOW_STALE_SECS" ;;
+# Staleness window for an `awaiting:"workflow"` yield, by rung. The 30-min default
+# is right for a feature-rung review fan-out and WRONG at the epic rung (R4), whose
+# fan-outs author or review whole document sets and routinely run past it. A false
+# STALE is not harmless: stop.sh's reason invites a relaunch, i.e. a duplicate of a
+# workflow that is still running.
+stale_secs_for_rung() {
+  case "${1:-}" in
+    4|R4|epic) printf '%s' "$WORKFLOW_STALE_SECS_EPIC" ;;
+    *)         printf '%s' "$WORKFLOW_STALE_SECS" ;;
   esac
 }
 
-# Canonical stage flow per pipeline type — the SINGLE source of truth for "what
-# stages a pipeline must walk", mirroring commands/atelier.md §3. Consumed by
-# the Stop hook (completion gate), the heartbeat, and the session-start hook.
-# Keep in sync with §3 if the flows ever change.
+# The one flow — the SINGLE source of truth for "what phases a run must walk",
+# mirroring commands/atelier.md §0. Every run walks the same seven phases; the rung
+# decides how deep each one goes (a phase can be one line, never absent). Consumed
+# by the Stop hook (completion gate), the heartbeat, and the session-start hook.
+FLOW_PHASES="frame brainstorm spec review execute validate handoff"
+flow_phases() { printf '%s' "$FLOW_PHASES"; }
+
+# Kept for pipelines created by the previous flow (typed stage lists). A state.json
+# with a persisted plan[] is authoritative either way; this is only the fallback.
 flow_for_type() {
-  case "$1" in
+  case "${1:-}" in
     task)    printf '%s' "task_brainstorm review_task implement review_code validate" ;;
     feature) printf '%s' "brainstorm review_spec write_plan review_plan implement review_code simplify e2e_gate write_e2e_plan review_e2e_plan e2e validate" ;;
     epic)    printf '%s' "brainstorm review_spec brainstorm_roadmap review_roadmap validate" ;;
-    # autonomous-epic = a deep multipart spec + roadmap + per-phase blueprints,
-    # then AUTONOMOUS execution of that roadmap phase by phase. The heavy speccing
-    # head is deliberately many stages rather than one mega-stage: each stage
-    # boundary is a ledger write, and `research` / `write_spec` / `write_blueprints`
-    # are the biggest context sinks in the pipeline (this mirrors the stage list a
-    # real epic of this shape actually used).
-    #
-    # `execute_roadmap` is a PLACEHOLDER. Once the blueprints are reviewed the
-    # orchestrator rewrites plan[] in state.json, expanding it into `ws_baseline`
-    # plus one `ws_<nn>_<slug>` stage per roadmap phase (atelier.md §3a). This
-    # canonical list is only the pre-expansion fallback for a state.json with no
-    # plan[]; after expansion the persisted plan[] is authoritative. `validate`
-    # stays last either way, so the terminal-stage completion gate still applies.
     autonomous-epic) printf '%s' "research brainstorm write_spec review_spec brainstorm_roadmap review_roadmap write_blueprints review_blueprints execute_roadmap gestalt validate" ;;
-    *)       printf '' ;;
+    *)       flow_phases ;;
   esac
 }
 
-# The terminal stage for a type (always the last in the flow; "" if unknown).
+# The terminal phase (last of the flow; a legacy typed pipeline keeps its own).
 terminal_stage() {
-  local flow; flow="$(flow_for_type "$1")"
-  [ -n "$flow" ] || { printf ''; return 0; }
+  local flow; flow="$(flow_for_type "${1:-}")"
   printf '%s' "${flow##* }"
 }
 
-# The terminal stage for an actual pipeline: prefer the persisted plan[]'s last
-# entry (the orchestrator's own declared definition-of-done), else fall back to
-# the canonical flow for its type.
+# The terminal phase for an actual pipeline: prefer the persisted plan[]'s last
+# entry (the orchestrator's own declared definition-of-done), else the flow (or,
+# for a legacy pipeline that still carries a type, that type's stage list).
 terminal_stage_for_state() {
   local sp="$1" t
   t="$(jq -r 'if ((.plan|type)=="array" and (.plan|length>0)) then (.plan[-1]) else "" end' "$sp" 2>/dev/null || true)"
@@ -167,9 +160,9 @@ stage_done() { # <state-path> <stage>
 }
 
 # Compact ledger line for reminders: what's done, what's left. Remaining is
-# (plan | flow) − done, order preserved. Some remaining stages may be skipped by
-# orchestrator judgment (e.g. e2e via e2e_gate) — this is a nudge, not a mandate;
-# only the terminal stage is hard-gated.
+# (plan | flow) − done, order preserved. A remaining phase may be one line deep by
+# the rung's judgment — this is a nudge, not a mandate; only the terminal phase is
+# hard-gated.
 ledger_line() {
   local sp="$1" type flow done_arr s done_csv rem_csv
   local rem=()

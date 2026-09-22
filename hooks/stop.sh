@@ -48,7 +48,7 @@ fi
 status="$(jq -r '.status // empty' "$sp" 2>/dev/null || true)"
 awaiting="$(jq -r '.awaiting // empty' "$sp" 2>/dev/null || true)"
 pid="$(jq -r '.id // empty' "$sp" 2>/dev/null || true)"
-ptype="$(jq -r '.type // empty' "$sp" 2>/dev/null || true)"
+ptype="$(jq -r 'if .rung != null then "rung \(.rung)" else (.type // "rung ?") end' "$sp" 2>/dev/null || true)"
 phase="$(jq -r '.phase // empty' "$sp" 2>/dev/null || true)"
 pdir="$(dirname "$sp")"
 
@@ -61,7 +61,7 @@ block() { jq -nc --arg r "$1" '{decision: "block", reason: $r}'; exit 0; }
 if [ "$status" = "complete" ]; then
   term="$(terminal_stage_for_state "$sp")"
   if [ -n "$term" ] && ! stage_done "$sp" "$term"; then
-    block "PREMATURE COMPLETE BLOCKED — pipeline ${pid} (${ptype}) is marked status:\"complete\" but the terminal stage '${term}' is NOT in done[]. $(ledger_line "$sp"). You stopped early — the rest of the flow never ran. Set status:\"running\", awaiting:null, set phase to the first remaining stage, and keep driving (re-read ${ROOT}/commands/atelier.md §3 for the flow). You may complete ONLY once '${term}' is in done[]."
+    block "PREMATURE COMPLETE BLOCKED — pipeline ${pid} (${ptype}) is marked status:\"complete\" but the terminal stage '${term}' is NOT in done[]. $(ledger_line "$sp"). You stopped early — the rest of the flow never ran. Set status:\"running\", awaiting:null, set phase to the first remaining stage, and keep driving (re-read ${ROOT}/commands/atelier.md for the flow). You may complete ONLY once '${term}' is in done[]."
   fi
   rm -f "$pdir/.heartbeat" "$pdir/.await-since" 2>/dev/null || true   # tidy sidecars
   exit 0
@@ -77,7 +77,7 @@ fi
 if [ "$awaiting" = "workflow" ]; then
   awf="$pdir/.await-since"
   now="$(date +%s)"
-  win="$(stale_secs_for_type "$ptype")"
+  win="$(stale_secs_for_rung "$(jq -r '.rung // .type // empty' "$sp" 2>/dev/null || true)")"
   if [ -f "$awf" ]; then
     since="$(cat "$awf" 2>/dev/null || printf '%s' "$now")"
     [[ "$since" =~ ^[0-9]+$ ]] || since="$now"
@@ -94,4 +94,4 @@ fi
 # --- status==running AND awaiting==null → mid-autonomous → BLOCK ---
 # Self-contained reason so a post-compaction orchestrator re-grounds itself.
 rm -f "$pdir/.await-since" 2>/dev/null || true
-block "You are the Atelier orchestrator for pipeline ${pid} (type ${ptype}), mid-autonomous execution. Do NOT yield. Re-read the driver at ${ROOT}/commands/atelier.md and the pipeline state at ${sp}, then continue driving at phase '${phase}'. $(ledger_line "$sp"). Update state.json (a single Write) as you advance."
+block "You are the Atelier orchestrator for pipeline ${pid} (type ${ptype}), mid-autonomous execution. Do NOT yield. Re-read the driver at ${ROOT}/commands/atelier.md, the pipeline state at ${sp}, and its brief.md + PROGRESS.md, then continue driving at phase '${phase}'. $(ledger_line "$sp"). Update state.json (a single Write) as you advance."

@@ -44,7 +44,7 @@ printf '%s\n' "$count" > "$cfile" 2>/dev/null || true
 [ $((count % HEARTBEAT_EVERY)) -eq 0 ] || exit 0
 
 pid="$(jq -r '.id // empty' "$sp" 2>/dev/null || true)"
-ptype="$(jq -r '.type // empty' "$sp" 2>/dev/null || true)"
+ptype="$(jq -r 'if .rung != null then "rung \(.rung)" else (.type // "rung ?") end' "$sp" 2>/dev/null || true)"
 phase="$(jq -r '.phase // empty' "$sp" 2>/dev/null || true)"
 task="$(jq -r '.task // empty' "$sp" 2>/dev/null || true)"; task="${task:0:300}"
 term="$(terminal_stage_for_state "$sp")"
@@ -52,6 +52,6 @@ term="$(terminal_stage_for_state "$sp")"
 msg="⏳ Atelier heartbeat — you are the orchestrator for pipeline ${pid} (${ptype}), phase '${phase}', mid-autonomous execution. Do NOT stop early or drift from the original task.
 TASK: ${task}
 LEDGER: $(ledger_line "$sp")
-DEFINITION OF DONE: you may set status:\"complete\" ONLY after '${term}' is in done[]. Walk every remaining stage (conditional ones may be skipped by judgment, e.g. e2e via e2e_gate). Keep state.json's done[]/phase current, and set awaiting before any yield."
+DEFINITION OF DONE: you may set status:\"complete\" ONLY after '${term}' is in done[]. Walk every remaining phase (a phase may be one line deep by the rung's judgment, never absent). Keep state.json's done[]/phase current, and set awaiting before any yield."
 emit_additional_context PostToolUse "$msg"
 exit 0

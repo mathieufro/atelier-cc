@@ -27,11 +27,11 @@ sp=""
 [ -n "$sid" ] && sp="$(find_owned_running_pipeline "$wsp" "$sid")"
 if [ -n "$sp" ]; then
   pid="$(jq -r '.id // empty' "$sp" 2>/dev/null || true)"
-  ptype="$(jq -r '.type // empty' "$sp" 2>/dev/null || true)"
+  ptype="$(jq -r 'if .rung != null then "rung \(.rung)" else (.type // "rung ?") end' "$sp" 2>/dev/null || true)"
   phase="$(jq -r '.phase // empty' "$sp" 2>/dev/null || true)"
   task="$(jq -r '.task // empty' "$sp" 2>/dev/null || true)"; task="${task:0:400}"
   term="$(terminal_stage_for_state "$sp")"
-  emit_additional_context SessionStart "You are the Atelier orchestrator and pipeline ${pid} (${ptype}) is still RUNNING (context was just ${src:-started}). Re-read ${ROOT}/commands/atelier.md and ${sp}, then resume driving at phase '${phase}'. Do NOT stop until '${term}' is in done[] and you set status:\"complete\".
+  emit_additional_context SessionStart "You are the Atelier orchestrator and pipeline ${pid} (${ptype}) is still RUNNING (context was just ${src:-started}). Re-read ${ROOT}/commands/atelier.md, ${sp}, and the brief.md + PROGRESS.md beside it, then resume driving at phase '${phase}'. Do NOT stop until '${term}' is in done[] and you set status:\"complete\".
 TASK: ${task}
 LEDGER: $(ledger_line "$sp")"
   exit 0

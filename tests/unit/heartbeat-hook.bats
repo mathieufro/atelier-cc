@@ -14,7 +14,7 @@ setup() {
 teardown() { rm -rf "$TMP"; }
 
 mkstate() { # <sourceSessionId> <status> <awaiting-json>
-  printf '{"id":"p1","type":"feature","task":"Build the format moat","sourceSessionId":"%s","status":"%s","awaiting":%s,"phase":"review_code","done":["brainstorm","implement"]}\n' \
+  printf '{"id":"p1","rung":2,"task":"Build the format moat","sourceSessionId":"%s","status":"%s","awaiting":%s,"phase":"execute","plan":["frame","brainstorm","spec","review","execute","validate","handoff"],"done":["frame","brainstorm","spec","review"]}\n' \
     "$1" "$2" "$3" > "$SP"
 }
 drive() { printf '%s' "$1" | bash "$HOOK"; }
@@ -28,7 +28,9 @@ drive() { printf '%s' "$1" | bash "$HOOK"; }
   [[ "$output" == *"Build the format moat"* ]]
   [[ "$output" == *"remaining="* ]]
   [[ "$output" == *"DEFINITION OF DONE"* ]]
-  [[ "$output" == *"validate"* ]]
+  [[ "$output" == *"handoff"* ]]
+  [[ "$output" == *"remaining=[execute,validate,handoff]"* ]]
+  [[ "$output" == *"rung 2"* ]]
 }
 
 @test "awaiting:user (interactive) → SILENT (no per-tool reminders during design)" {

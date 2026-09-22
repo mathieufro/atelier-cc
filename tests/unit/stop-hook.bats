@@ -13,7 +13,7 @@ setup() {
 teardown() { rm -rf "$TMP"; }
 
 mkstate() { # <sourceSessionId> <status> <awaiting-json> [done-json]
-  printf '{"id":"p1","type":"feature","sourceSessionId":"%s","status":"%s","awaiting":%s,"phase":"implement","done":%s}\n' \
+  printf '{"id":"p1","rung":2,"sourceSessionId":"%s","status":"%s","awaiting":%s,"phase":"execute","done":%s}\n' \
     "$1" "$2" "$3" "${4:-[]}" > "$SP"
 }
 drive() { printf '%s' "$1" | bash "$HOOK"; }
@@ -63,18 +63,18 @@ drive() { printf '%s' "$1" | bash "$HOOK"; }
 }
 
 @test "status:complete WITH terminal stage done → ALLOW (terminal)" {
-  mkstate sess-A complete null '["implement","review_code","simplify","e2e_gate","validate"]'
+  mkstate sess-A complete null '["frame","brainstorm","spec","review","execute","validate","handoff"]'
   run drive "{\"session_id\":\"sess-A\",\"cwd\":\"$TMP\"}"
   [ -z "$output" ]
 }
 
 @test "status:complete WITHOUT terminal stage in done → BLOCK (premature-complete gate, D1)" {
-  mkstate sess-A complete null '["brainstorm","review_spec","write_plan","review_plan","implement"]'
+  mkstate sess-A complete null '["frame","brainstorm","spec","review","execute","validate"]'
   run drive "{\"session_id\":\"sess-A\",\"cwd\":\"$TMP\"}"
   [ "$status" -eq 0 ]
   [[ "$output" == *'"block"'* ]]
   [[ "$output" == *"PREMATURE"* ]]
-  [[ "$output" == *"validate"* ]]
+  [[ "$output" == *"handoff"* ]]
 }
 
 @test "status:failed → ALLOW (terminal — bounded retries exhausted)" {
@@ -105,19 +105,40 @@ drive() { printf '%s' "$1" | bash "$HOOK"; }
   [ -z "$output" ]
 }
 
-@test "block reason is self-contained (names pipeline, type, phase, driver path, ledger) for compaction recovery" {
+@test "block reason is self-contained (names pipeline, rung, phase, driver path, ledger) for compaction recovery" {
   mkstate sess-A running null
   run drive "{\"session_id\":\"sess-A\",\"cwd\":\"$TMP\"}"
   [[ "$output" == *"p1"* ]]
-  [[ "$output" == *"feature"* ]]
-  [[ "$output" == *"implement"* ]]
+  [[ "$output" == *"rung 2"* ]]
+  [[ "$output" == *"execute"* ]]
+  [[ "$output" == *"PROGRESS.md"* ]]
   [[ "$output" == *"commands/atelier.md"* ]]
   [[ "$output" == *"remaining="* ]]
 }
 
-@test "completion gate honors persisted plan[] terminal stage over the type default" {
-  printf '{"id":"p1","type":"feature","sourceSessionId":"sess-A","status":"complete","awaiting":null,"phase":"x","plan":["a","b","done_stage"],"done":["a","b"]}\n' > "$SP"
+@test "completion gate honors persisted plan[] terminal stage over the flow default" {
+  printf '{"id":"p1","rung":2,"sourceSessionId":"sess-A","status":"complete","awaiting":null,"phase":"x","plan":["a","b","done_stage"],"done":["a","b"]}\n' > "$SP"
   run drive "{\"session_id\":\"sess-A\",\"cwd\":\"$TMP\"}"
   [[ "$output" == *'"block"'* ]]
   [[ "$output" == *"done_stage"* ]]
+}
+
+@test "epic rung (R4) gets the longer stale window: 4000s old wait is still fresh" {
+  printf '{"id":"p1","rung":4,"sourceSessionId":"sess-A","status":"running","awaiting":"workflow","phase":"spec","done":["frame","brainstorm"]}\n' > "$SP"
+  printf '%s\n' "$(( $(date +%s) - 4000 ))" > "$TMP/.atelier/pipelines/p1/.await-since"
+  run drive "{\"session_id\":\"sess-A\",\"cwd\":\"$TMP\"}"
+  [ -z "$output" ]
+}
+
+@test "legacy typed pipeline (feature, no plan[]) keeps its own terminal stage: complete without validate → BLOCK" {
+  printf '{"id":"p1","type":"feature","sourceSessionId":"sess-A","status":"complete","awaiting":null,"phase":"implement","done":["brainstorm","implement"]}\n' > "$SP"
+  run drive "{\"session_id\":\"sess-A\",\"cwd\":\"$TMP\"}"
+  [[ "$output" == *'"block"'* ]]
+  [[ "$output" == *"validate"* ]]
+}
+
+@test "new flow without plan[] falls back to the seven phases: complete with handoff done → ALLOW" {
+  printf '{"id":"p1","rung":0,"sourceSessionId":"sess-A","status":"complete","awaiting":null,"phase":"handoff","done":["frame","execute","validate","handoff"]}\n' > "$SP"
+  run drive "{\"session_id\":\"sess-A\",\"cwd\":\"$TMP\"}"
+  [ -z "$output" ]
 }

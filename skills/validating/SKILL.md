@@ -1,86 +1,110 @@
 ---
 name: validating
-description: Autonomous validation — reads the spec's Validation Protocol, executes the checks, loops to fix failures, returns a report. Always autonomous; never asks the user.
-stage: validate
+description: Prove it works before the owner looks — run the protocol, drive the real surface end to end, gate with gestalt where surfaces changed, publish a proof board with evidence per claim, loop fix and re-verify until every card is judged, and say plainly what remains unverified.
+phase: validate
 ---
 
-# Validation
+# Validating
 
-You are the **validate** stage, dispatched as a single autonomous worker. Your job: verify the implementation actually works by executing the spec's **Validation Protocol**, fixing what you can, and returning a report. There is **no user** at this stage — you never ask for confirmation, and the end-of-pipeline human summary is the orchestrator's job, not yours.
+Automated tests pass while the product is still obviously broken to a human eye, and an
+automated judge has signed criteria green that were not. Validation is therefore layered:
+the protocol, the real surface, the gestalt gate, the proof board, and the owner last. There
+is no user in this phase until the board is ready; nothing here asks.
 
-## Ground first
+## Depth by rung
 
-Read the **dossier** and the **spec** from the paths the orchestrator passes in the task framing — they are already produced upstream, so consume them rather than cold-exploring. The orchestrator also gives you the **base ref / diff range** and the relevant **artifact paths**; use the provided diff range to see what changed — do **not** hardcode `main` or guess a base branch (that breaks on worktree and non-`main` pipelines).
+- **R0**: the test that fails without the fix, seen red then green, plus whatever check the
+  change implies (a build, a rendered screen, a routed message). Paste the counts.
+- **R1**: the brief's checks, run and pasted into `PROGRESS.md`.
+- **R2 and R3**: everything below, sized to the surface. At R3 a coverage pass over a large
+  surface is a sweep: haiku or sonnet agents each check a slice against one schema, you
+  synthesise and judge.
+- **R4**: per phase at phase close, and a final pass against `S1..Sn` with evidence per
+  criterion before the completion promise.
 
-## Find the Validation Protocol
+## 1. The protocol
 
-In the spec, find the section titled **"Validation Protocol"**.
+Read the spec's validation protocol and its prerequisites. Run each prerequisite check first;
+a missing prerequisite is recorded as a failed step with the env var or CLI it should come
+from, the rest of the protocol still runs, and the report is `NEEDS_ATTENTION`. Never
+authenticate, mint or substitute a credential. Run each command, capture output and exit
+code, judge against the stated success. Fix what fails with minimal targeted changes, up to a
+handful of fix-and-rerun cycles; undo a fix that makes things worse; stop early on a circular
+regression and report it.
 
-- **Found and non-empty** → execute it (below).
-- **Found but `N/A`, or not found** → there is nothing executable to run. Write a one-line report noting "no validation protocol — nothing to execute" (or skip the report), then return a DONE-SIGNAL as your final message.
+## 2. The real surface
 
-## Required access — check it, never ask for it
+E2E means the real application runs in the real environment: real host, real server, real
+window, real bytes on the wire, the real deployment boundary. A component rendered in a
+simulator with simulated messages is a unit test wearing a costume, and the polytimbral
+gauntlet's critical bug (two note queues, one per binary, silent output when hosted) was
+invisible to every test that kept producer and consumer in one process.
 
-If the spec has a **Prerequisites / Required Access** section, read it first. For each item it names (a credential, an authenticated CLI like `glab`/`gh`/cloud login, a deploy target), run the stated check (e.g. `glab auth status`) before the commands that depend on it. If a prerequisite is **absent from the environment**, do **not** try to authenticate, mint, or substitute a credential, and do **not** ask the user — there is no user here. Record it as a failed step, finish the rest of the protocol you *can* run, and return a `NEEDS_ATTENTION` report whose Summary names the exact missing prerequisite (and the env var / CLI it should come from). The same applies if a validation command fails purely because of missing access rather than a real defect: that is a blocked prerequisite, not a code bug to "fix."
+- Launch programmatically, wait for readiness by signal or poll (never sleep), drive through
+  the real interface, observe real outputs, tear down clean, isolate per test.
+- Assert on user-visible behaviour a real user would hit in their first minutes, with at
+  least one assertion per scenario that would catch a real regression. "If this passes but
+  the feature is broken, what did I miss."
+- A dependency is mocked only when running it is genuinely impractical (paid with no free
+  tier, proprietary hardware), at the outermost boundary, with recorded real responses.
+- Visual checks are dual-path where the project has goldens: pixel diff first, then an LLM
+  check with negative probes. Goldens are blessed only from a frame that already passed a
+  gestalt judgment, with the judging run recorded; an unjudged golden freezes a defect into
+  the baseline.
+- All bugs found here are yours to fix, pre-existing or not, with a red-then-green test.
 
-## Execute the protocol
+## 3. The gestalt gate
 
-1. **Parse it.** Extract each step: the command to run, the success criteria (exit code, output pattern, file content), and any failure-diagnosis guidance.
+Where the work built or changed a user-visible surface, run a gestalt walk on it with the
+gestalt plugin (`/gestalt walk`, or the walk skill's procedure driven by hand): capture the
+rendered artifact, read numbers from the structured sidecar never from pixels, judge
+closed-world against the charter written at Spec time, sweep every affordance to intent,
+hop one entity across every surface that shows it, verify every candidate finding by a second
+source or a fresh skeptic with planted probes, restore any state you wrote and prove it.
 
-2. **Run each command** via bash. Capture stdout, stderr, and exit code. For tests, use Strobe `debug_test` so you get live progress, structured results, and stuck detection — never raw `bun run test`.
+Gate rules:
 
-3. **Evaluate** each result against its stated success criteria.
+- **BLOCK** on any confirmed high finding; any confirmed finding on a surface this work built
+  or changed; a built surface with no charter or no capture; a harness integrity failure on a
+  surface this work owns; a policy breach or a missing restore verification.
+- **ADVANCE** otherwise, recording confirmed findings on untouched surfaces as pre-existing,
+  design gaps as owner gates, and charter corrections as cited `benign.md` lines.
+- A high the work cannot legitimately fix is deferred only by landing a deterministic oracle
+  that pins it (red-verified, registered in the suite CI runs). Deferral costs an oracle;
+  dismissal costs a cited benign line. Never silently.
+- Three outcomes per check, not two: PASS, FINDING, NOT VERIFIED. Uncovered surface never
+  counts as green.
 
-4. **All pass** → write the validation report to the assigned output path and return a DONE-SIGNAL stating the path and result (`PASS`).
+A walk is driven, never built: throwaway scripts in the run directory, no harness.
 
-5. **Some fail** → diagnose using the spec's guidance and the actual failure output:
-   - Read the failure output carefully; identify the root cause (test assertion, missing file, wrong output, compile error, missing dependency).
-   - Make **minimal, targeted** fixes — edit source, add a missing import, fix a logic error, install a missing dep. You CAN modify source files here; that is expected.
-   - Do NOT re-run the whole pipeline — just fix and re-validate the affected commands.
-   - Repeat: up to **~5 internal fix/re-validate cycles** before you finalize. This is your own worker-internal budget; whether the pipeline advances on a partial result is the orchestrator's decision via its own caps — not something you force.
+## 4. The proof board
 
-6. **Budget exhausted** → write a report documenting what passed, what still fails, and what you attempted, then return a DONE-SIGNAL with result `PARTIAL`. Partial fixes are still valuable.
+For a user-visible surface at R2 and above, and always at R4:
 
-### Between cycles
+1. **Catalog** the checks: one item per thing to prove, from the success criteria, the
+   charters, the plan's e2e scenarios and the gestalt findings. Fields per the `boards` skill.
+2. **Prove** each item yourself or with fan-out agents per area (opus for judgement, sonnet
+   for mechanical captures): a verdict, a summary of what you did and saw, evidence files
+   (screenshot, audio, log), defects found with their status. Items only a human can judge
+   (taste, feel, hardware in hand) are marked `human`.
+3. **Build and publish** the board (`scripts/proof-board.py`, then the Artifact tool with
+   the `db` capability). Your verdicts are frozen in the page; the owner's go into the
+   database.
+4. **Fix-review rounds**: the owner judges cards; you read the verdicts back, fix every
+   `issue` with a red-then-green test and a mutation check, redeploy, re-prove the affected
+   cards, republish a new version, backup the verdicts. Repeat until every card carries an
+   owner verdict. What is left is listed as open in the handoff, never quietly dropped.
 
-- You keep full context — remember previous failures and fixes.
-- If a fix makes things worse (more failures than before), undo just the lines you changed last cycle (`git diff HEAD` to see your modifications, restore selectively) and try a different approach.
-- If the same failures keep recurring (circular regression), stop early and report the cycle.
-- Recognize flaky tests — if a test passes on re-run with no code change, note it as flaky rather than claiming a fix.
+The owner's "does this look right" is a taste call and a gate; your 7 out of 10 is not a
+pass.
 
-## Validation report format
+## 5. The report
 
-Write to the assigned output path:
-
-```
-# Validation Report
-
-## Result
-[PASS | PARTIAL | NEEDS_ATTENTION]
-
-## Validation Steps
-### Step 1: [command]
-- Result: [pass/fail]
-- Output: [summary of stdout/stderr]
-- [If fixed: what was changed and why]
-
-### Step 2: ...
-
-## Summary
-[Brief description of final state; note any flaky tests or unresolved failures]
-```
-
-`PASS | PARTIAL | NEEDS_ATTENTION` is the human-readable Result line. **Echo that same result in your final DONE-SIGNAL** so the orchestrator can record it in state.json — there is no out-of-band verdict field.
-
-## Boundaries
-
-- You do **not** handle git operations or worktree cleanup — that is the orchestrator's job after you return.
-- Validation commands run in the workspace directory (the project root the orchestrator put you in).
+`validation.md`: a verdict table (check, method: measured | analytic | not measured, result,
+evidence path), the gestalt verdict with its run doc, the board URL and its tally, then a
+plain list of what remains unverified. Result: `PASS`, `PARTIAL` or `NEEDS_ATTENTION`.
 
 ## Returning
 
-Write your report to the assigned path, then end your turn with your result as your **final message**:
-
-- `DONE — validation PASS, report at <path>` (or `PARTIAL` / `NEEDS_ATTENTION`).
-
-If you are genuinely blocked from even *running* validation — e.g. a missing toolchain you cannot install — return a STUCK-REPORT as your final message instead: `{stuck:true, stage:"validate", attempted:[…], blocker:…, lastError:…, partialArtifacts:{report:<path>}}`. The orchestrator reads your final message and updates state.json.
+`VALIDATION <result> — protocol <n>/<n>, e2e <n>/<n>, gestalt <ADVANCE|BLOCK|N/A>, board
+<url> <tally>, unverified: <list>, report at <path>`.
