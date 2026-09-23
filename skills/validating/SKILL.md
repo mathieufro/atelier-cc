@@ -13,14 +13,21 @@ is no user in this phase until the board is ready; nothing here asks.
 
 ## Depth by rung
 
+Every rung ends with the final QA board (section 4). The rung and the risk set its size
+(the table there), never whether it exists.
+
 - **R0**: the test that fails without the fix, seen red then green, plus whatever check the
-  change implies (a build, a rendered screen, a routed message). Paste the counts.
-- **R1**: the brief's checks, run and pasted into `PROGRESS.md`.
+  change implies (a build, a rendered screen, a routed message). Paste the counts. Board:
+  the handful of cards that say the fix works where a user meets it.
+- **R1**: the brief's checks, run and pasted into `PROGRESS.md`, then the board.
 - **R2 and R3**: everything below, sized to the surface. At R3 a coverage pass over a large
   surface is a sweep: haiku or sonnet agents each check a slice against one schema, you
   synthesise and judge.
-- **R4**: per phase at phase close, and a final pass against `S1..Sn` with evidence per
-  criterion before the completion promise.
+- **R4**: per phase at phase close, with the per-phase boards the owner judges as the epic
+  goes (`boards`). Those stay what they are. Once the whole pipeline is implemented, the
+  final QA board (section 4) is a separate step with its own catalogue over the entire
+  epic, then the final pass against `S1..Sn` with evidence per criterion before the
+  completion promise.
 
 ## 1. The protocol
 
@@ -77,23 +84,95 @@ Gate rules:
 
 A walk is driven, never built: throwaway scripts in the run directory, no harness.
 
-## 4. The proof board
+## 4. The final QA board
 
-For a user-visible surface at R2 and above, and always at R4:
+A separate step, run once the pipeline is fully implemented, and distinct from any
+per-phase board: its own catalogue, over everything the pipeline shipped. Every pipeline
+ends with one, whatever its size. The goal is that every card a machine can
+prove is proven, and every defect found is fixed and rewalked, before the owner looks. The
+owner's clicks then judge a finished product, not a to do list.
 
-1. **Catalog** the checks: one item per thing to prove, from the success criteria, the
-   charters, the plan's e2e scenarios and the gestalt findings. Fields per the `boards` skill.
-2. **Prove** each item yourself or with fan-out agents per area (opus for judgement, sonnet
-   for mechanical captures): a verdict, a summary of what you did and saw, evidence files
-   (screenshot, audio, log), defects found with their status. Items only a human can judge
-   (taste, feel, hardware in hand) are marked `human`.
-3. **Build and publish** the board (`scripts/proof-board.py`, then the Artifact tool with
-   the `db` capability). Your verdicts are frozen in the page; the owner's go into the
-   database.
-4. **Fix-review rounds**: the owner judges cards; you read the verdicts back, fix every
-   `issue` with a red-then-green test and a mutation check, redeploy, re-prove the affected
-   cards, republish a new version, backup the verdicts. Repeat until every card carries an
-   owner verdict. What is left is listed as open in the handoff, never quietly dropped.
+### Size it to the task
+
+Size the catalogue to what the work touched and what it risks, not to look thorough. A
+one line change in a payment path earns more cards than a large refactor of a test helper.
+Rough bands, then adjust by risk:
+
+| Work | Cards | Who proves them |
+|---|---|---|
+| R0, one fix | 2 to 5: the fix where the user meets it, the neighbour it could break, the red then green test | you, no fan-out |
+| R1, a small change | 5 to 20 | you |
+| R2, a feature | 20 to 80, grouped by surface | you plus one to three area agents |
+| R3, a wide change | 80 to 250, grouped by surface and risk tier | area agents in waves, sweeps for mechanical captures |
+| R4, an epic or a release branch | hundreds, tiered by risk and rollout stage | area agents in waves, a ledger entry and a recount per wave |
+
+Never pad: every card has its own observable that could fail, and one observable is one
+card, not three. Never trim to save effort: a surface the work changed with no card is a
+hole in the board, and the board says so. The page, the tooling and the loop are the same
+at every size; only the count and the fan-out change.
+
+### 4.1 Author the catalogue (once everything is implemented, before the e2e)
+
+Not at Spec time: the spec moves during Execute, and a catalogue written then describes a
+plan that no longer exists. Not from the per-phase boards: they judged each phase as it
+landed, not the whole as it now stands. Not after the e2e: a catalogue written from what already passed
+tests the tests. Author it when Execute is done and before the first proof run, from:
+
+- a **census of the real diff**: every commit, every touched file, every changed behaviour,
+  including what landed without being planned (that is where the defects hide);
+- `S1..Sn`, the charters, the edge cases and the amendments, as they stand now;
+- the **previous release as a baseline**: what worked before and must still work (upgrade
+  paths, saved data, settings, migrations), not only what is new;
+- every surface a user meets: each app, device, page, CLI, email, file format, and each
+  boundary between two of them.
+
+Write it adversarially: for each change ask how it could be wrong for a real user in the
+first minutes, and write that as a card. Each card states `what`, `where`, a concrete
+`check` with the observable that decides it, the `gate` (test, code line or flag), and
+`proof`: the evidence the card requires (screenshot of the real surface, rendered audio,
+HTTP response, SQL row, device memory read, a named test run). Tier the cards by risk and by
+rollout stage. A card that cannot say what would make it fail is not a card yet.
+
+### 4.2 Prove every card yourself
+
+Fan out per area (opus for judgement, sonnet for mechanical captures) with one written
+agent brief and one proof contract for all of them (see `boards`). The contract:
+
+- A card passes only on evidence of the real surface or a test run in this session, cited
+  by exact case names and the tail of the output. An earlier run, a green CI badge or a
+  code reading is not proof.
+- The strongest evidence wins: a measurement over a screenshot of a number, a read of the
+  device over a claim about it.
+- Plain sentences: what was done, what was seen, the counts. No hedging.
+- A card that turns out to be wrong about the product (the feature changed by design, the
+  check names removed behaviour) is corrected in the catalogue with the reason, never
+  passed or failed as written.
+
+**Shrink `human` to what truly needs a person.** Before marking a card human, find a machine
+path and record it as the accepted method: drive the app through its accessibility tree,
+inject gestures at the device's input seam from a QA build, read the screen or LEDs from
+device memory, render and measure the audio, pay a test mode checkout headlessly, seed the
+backend with the state the card needs. Human is for taste, feel, a part nobody has on the
+bench, and decisions only the owner can take; each human card says which. Out of bench
+cards (another OS, other hardware) say so and are counted apart.
+
+### 4.3 Fix and rewalk before the owner looks
+
+Every `fail` is fixed with a red then green test and a mutation check, then the card is
+rewalked on the rebuilt surface. Every `partial` names its missing leg, and the loop goes
+after the legs. Recount after each wave (`pass / fail / partial / human / blocked` out of
+the total) and write the tally in the ledger with the wave's fixes, commits and incidents.
+Publish when the machine provable cards are proven or their remaining legs are genuinely out
+of reach, and state the ceiling: how many cards need hands, another bench or a decision.
+
+### 4.4 Publish and run the owner rounds
+
+Build and publish the board (`scripts/proof-board.py`, then the Artifact tool with the `db`
+capability). Your verdicts are frozen in the page; the owner's go into the database. Then
+the rounds: read the owner's verdicts back, fix every `issue` with a red then green test and
+a mutation check, redeploy, re-prove the affected cards, republish a new version, back up
+the verdicts. Repeat until every card carries an owner verdict. What is left is listed as
+open in the handoff, never quietly dropped.
 
 The owner's "does this look right" is a taste call and a gate; your 7 out of 10 is not a
 pass.

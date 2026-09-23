@@ -19,8 +19,18 @@ flow; nothing else asks.
   config.json                title, intro, facts, round note
   site/                      generated: index.html + proof/_m/<hash>.<ext>
   verdicts-<date>.json       backups of the owner's verdicts
+.atelier/pipelines/<id>/qa/   the final QA board (validating section 4), same layout as board/,
+                              plus brief.md (the agent brief) and README.md (the proof contract)
 .atelier/pipelines/<id>/gates/<id>.md   gate files
 ```
+
+The final QA board lives in `qa/`, apart from the per-phase `board/`: its own catalogue, its
+own page and URL, its own verdicts.
+
+**Keep it off `/tmp`.** A scratch directory under `/tmp` or `/private/tmp` is swept by the OS
+(macOS deletes files not accessed for three days); one run lost 204 proof records overnight.
+The board directory lives in the run directory above, or in a durable folder the run links
+to, never only in a session scratchpad.
 
 ## Catalog
 
@@ -32,6 +42,10 @@ flow; nothing else asks.
  "where":"Perform view, macro row","check":"Cutoff readout follows the knob within one frame; audio RMS above 1 kHz rises.",
  "gate":"tests/e2e/perform.spec.ts:88","priority":"P0","automatable":"yes","source":"S4"}
 ```
+
+The final QA board adds `"tier"` (risk or rollout stage, e.g. `T1` ships first) and
+`"proof"`, the list of evidence the card requires (`["screenshot of the real surface", "test
+run named X"]`), so a proving agent knows what counts before it starts.
 
 `kind` is `check` (proof board) or `decision` (decision board). A decision card carries
 `options:[{"id":"A","label":"…","recommended":true,"why":"…"}]` and `evidence` paths instead
@@ -54,6 +68,17 @@ Verdicts: `pass` (proven) · `fail` (defect found) · `partial` · `human` (need
 hands) · `blocked` · `untested`. Evidence is evidence: a screenshot of a number is not a
 measurement; the log with the number is.
 
+## Agent brief and proof contract (final QA board)
+
+Every proving agent gets the same two files before its card list: `qa/brief.md` (how to take
+a card: read what, where, check, gate and proof; open the gate code when the check is
+ambiguous; produce the required proof; write `result.json`; report one line per card) and
+`qa/README.md` (the proof contract from validating 4.2, the drivers and tools of this
+project, how to reach its backends and devices, the hard rules: one heavy job at a time, no
+destructive git, no commits by proving agents, never print secrets, restore any state you
+change). Writing them once keeps two hundred proofs consistent; each agent prompt then only
+names its cards and what changed since the last wave.
+
 ## Build and publish
 
 ```bash
@@ -66,6 +91,12 @@ tool: `file_path` the page, `files` mapping `proof/_m/*` from the site dir, and
 `capabilities: {db: {}}` on the first publish (load the `artifact-capabilities` skill before
 passing capabilities). Republish to the same URL for every round; the owner's verdicts live
 in the database, not in the page, so a republish keeps them.
+
+Large boards: a publish carries at most 255 files and a version at most 512, so publish the
+page with the first chunk of media (with `capabilities`), then the rest in chunks of 250 with
+`url`, and on a later round publish only the media that changed (keep the list of media
+already published next to the board). Media go as jpg and mp3; text is inlined; no ESC bytes
+in inlined logs.
 
 Each card shows my verdict frozen in the page and offers the owner three buttons (ok, issue,
 skip) plus a note; a decision card offers its options. The page writes to the `verdicts`
