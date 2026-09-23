@@ -30,7 +30,7 @@ Seven phases, always in this order. A phase can be one line deep; it is never ab
 | **Review** | `reviews/<artifact>-<n>.md`, a fix ledger | Fresh eyes on the spec and plan before code exists. One pass, one fix, no re-review. |
 | **Execute** | `LOOP-BRIEF.md`, `PROGRESS.md`, commits | Test-first, one task per iteration, verified by a fresh skeptic per batch, landed with its SHA in the ledger. |
 | **Validate** | `validation.md`, `board/`, gestalt run docs | Automated first: the protocol, e2e through the real surface, a gestalt walk where surfaces changed, a proof board with evidence per claim. The owner checks last. |
-| **Handoff** | `handoff.md` | What was built, what is proven, what remains unverified, what to try first. Under ten lines. |
+| **Handoff** | `handoff.md` | What was built, what is proven, what remains unverified, what to try first. As short as the outcome allows. |
 
 Every phase reads the phase before it and writes one place. Nothing is journalled into
 `state.json`; the ledger is `PROGRESS.md`, and where the ledger and git disagree, git wins.
@@ -52,12 +52,12 @@ What each rung does per phase:
 
 - **R0**: Frame, Execute, Validate, in three short steps. Brainstorm is one confirming line
   only if intent is ambiguous. No review. Validation is the test that fails without the fix
-  plus whatever check the change implies. Handoff is three lines.
-- **R1**: a ten-line brief stands in for the spec. Self-skeptic on the diff (mutation check);
+  plus whatever check the change implies. Handoff is a few lines.
+- **R1**: a short brief stands in for the spec. Self-skeptic on the diff (mutation check);
   one fresh opus skeptic if the change touches a risk area. Validation from the brief's checks.
 - **R2**: a real brainstorm; a spec with success criteria, validation protocol and
-  prerequisites; a plan in the wave-spec shape; fresh-eyes review of the spec with one to three
-  lenses, opus on the risky one; a skeptic per batch of landings; validation through the real
+  prerequisites; a plan in the wave-spec shape; fresh-eyes review of the spec with the lenses its risks
+  call for, opus on the risky ones; a skeptic per batch of landings; validation through the real
   surface and a proof board when the surface is user-visible.
 - **R3**: R2 plus cheap-model sweeps wherever many independent reads feed one small answer
   (research surveys, datasheets, API or web scraping, codebase-wide audits, corpus checks, a

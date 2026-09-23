@@ -16,7 +16,7 @@ spots.
 - **R0**: none.
 - **R1**: your own check of the brief against the code: does each done-when line have a test
   that fails without it.
-- **R2**: one to three lenses on the spec, opus on the risky one, sonnet on the routine ones;
+- **R2**: the lenses the spec's risks call for, no more, opus on the risky ones, sonnet on the routine ones;
   the plan reviewed only if the change is risky (concurrency, a new boundary, a formula).
 - **R3**: R2 plus `api-grounding` (every external call checked against real documentation
   with web search) when external APIs are used, or `science-grounding` (the algorithm or
@@ -24,7 +24,7 @@ spots.
 - **R4**: R2 per document (spec, roadmap); each per-phase plan gets one opus skeptic pass
   when its phase starts, never a panel.
 
-Right-size: an 8-file task does not get four blueprint reviewers. Review sits well under a
+Right-size: a small task does not get a panel of blueprint reviewers. Review sits well under a
 third of implementation time.
 
 ## The fresh-eyes discipline
@@ -74,7 +74,7 @@ returns with zero fixes landed unless it is genuinely blocked (stuck report).
 - The skeptic is a fresh opus agent given the goal, the diff and the ledger's test commands,
   prompted to **refute**: run the named tests, read the diff, apply the mutation each test
   claims to catch and confirm it goes red, check the discriminator on every numeric done-when.
-  Plant one or two known-false probes among the claims; a skeptic that confirms a probe is not
+  Plant known-false probes among the claims; a skeptic that confirms a probe is not
   reading, and its verdicts are discarded.
 - It returns `PASS` or `FINDINGS` with severity, location, evidence and the exact counts it
   saw. It never fixes.

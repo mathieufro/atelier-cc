@@ -12,7 +12,7 @@ discovered later. Write assertions, not aspirations.
 ## Depth by rung
 
 - **R0**: the done-when lines in `brief.md` are the spec. Nothing else.
-- **R1**: a ten-line brief in `brief.md`: what changes, the criteria, the checks to run, the
+- **R1**: a short brief in `brief.md`: what changes, the criteria, the checks to run, the
   files. It is the plan too.
 - **R2 and R3**: `spec.md` plus `plan.md`.
 - **R4**: `spec.md` with satellites split by facet only when a facet would drown the core

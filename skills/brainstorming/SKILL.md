@@ -13,7 +13,7 @@ flow where a question is legitimate, so everything that needs the owner is settl
 
 - **R0**: no conversation unless the intent is genuinely ambiguous; then one line with your
   reading and a recommendation, and go.
-- **R1**: two exchanges at most: scope, risk, the fix you intend. If the owner already said
+- **R1**: as few exchanges as it takes: scope, risk, the fix you intend. If the owner already said
   what they want, confirm and go.
 - **R2**: the conversation below, ending in an approved spec.
 - **R3**: open with a research sweep (haiku or sonnet readers, one schema: claim, source,
@@ -26,7 +26,7 @@ flow where a question is legitimate, so everything that needs the owner is settl
 
 - One question per turn, always with a recommendation and its rationale, alternatives with
   theirs. Have an opinion. Plain prose; the owner replies in chat.
-- Present design in sections of 200 to 300 words and validate each before the next.
+- Present the design in short sections, each sized to one decision, and validate each before the next.
 - Adapt to the owner's proficiency; they are experienced engineers who want cognitive load
   kept low. No jargon walls, no long breakdowns.
 - Never ask what the codebase or the brief already answers. Confirm and extend your grounding

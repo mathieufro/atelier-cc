@@ -56,7 +56,7 @@ of `check` and `gate`. `automatable: "human"` marks a card only the owner can ju
 `proof/<ITEM-ID>/result.json`:
 
 ```json
-{"verdict":"pass","summary":"What I did and saw, in two sentences, with the counts.",
+{"verdict":"pass","summary":"What I did and saw, with the counts.",
  "evidence":[{"kind":"image","file":"perform-macro.png","caption":"Cutoff at 2.1 kHz after the turn"},
              {"kind":"audio","file":"macro-sweep.wav","caption":"Sweep, 4 s"},
              {"kind":"text","file":"test.log","caption":"e2e run, 12 passed"}],
@@ -76,7 +76,7 @@ ambiguous; produce the required proof; write `result.json`; report one line per 
 `qa/README.md` (the proof contract from validating 4.2, the drivers and tools of this
 project, how to reach its backends and devices, the hard rules: one heavy job at a time, no
 destructive git, no commits by proving agents, never print secrets, restore any state you
-change). Writing them once keeps two hundred proofs consistent; each agent prompt then only
+change). Writing them once keeps every proof consistent, however many there are; each agent prompt then only
 names its cards and what changed since the last wave.
 
 ## Build and publish

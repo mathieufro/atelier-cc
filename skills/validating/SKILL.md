@@ -13,8 +13,8 @@ is no user in this phase until the board is ready; nothing here asks.
 
 ## Depth by rung
 
-Every rung ends with the final QA board (section 4). The rung and the risk set its size
-(the table there), never whether it exists.
+Every rung ends with the final QA board (section 4). What the work touched and risks sets
+its size, never whether it exists.
 
 - **R0**: the test that fails without the fix, seen red then green, plus whatever check the
   change implies (a build, a rendered screen, a routed message). Paste the counts. Board:
@@ -94,22 +94,17 @@ owner's clicks then judge a finished product, not a to do list.
 
 ### Size it to the task
 
-Size the catalogue to what the work touched and what it risks, not to look thorough. A
-one line change in a payment path earns more cards than a large refactor of a test helper.
-Rough bands, then adjust by risk:
+Size the catalogue to what the work touched and what it risks, never to a target count. There
+is no quota: as many cards as the work needs, and no more. A one line change in a payment
+path earns more cards than a large refactor of a test helper; a single fix may need a
+handful, a release branch hundreds. Decide from the census, not from the rung.
 
-| Work | Cards | Who proves them |
-|---|---|---|
-| R0, one fix | 2 to 5: the fix where the user meets it, the neighbour it could break, the red then green test | you, no fan-out |
-| R1, a small change | 5 to 20 | you |
-| R2, a feature | 20 to 80, grouped by surface | you plus one to three area agents |
-| R3, a wide change | 80 to 250, grouped by surface and risk tier | area agents in waves, sweeps for mechanical captures |
-| R4, an epic or a release branch | hundreds, tiered by risk and rollout stage | area agents in waves, a ledger entry and a recount per wave |
-
-Never pad: every card has its own observable that could fail, and one observable is one
-card, not three. Never trim to save effort: a surface the work changed with no card is a
-hole in the board, and the board says so. The page, the tooling and the loop are the same
-at every size; only the count and the fan-out change.
+- Scale the method with the count: a small board you prove yourself; a wide one fans out per
+  area in waves, with sweeps for mechanical captures and a ledger entry and recount per wave.
+- Never pad: every card has its own observable that could fail, and one observable is one
+  card. Never trim to save effort: a surface the work changed with no card is a hole in the
+  board, and the board says so.
+- The page, the tooling and the loop are the same at every size.
 
 ### 4.1 Author the catalogue (once everything is implemented, before the e2e)
 
