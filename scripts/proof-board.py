@@ -27,7 +27,7 @@ import sys
 
 VERDICT_LABEL = {"pass": "Proven", "fail": "Defect found", "partial": "Partly proven",
                  "human": "Needs your hands", "blocked": "Blocked", "untested": "Not yet run",
-                 "open": "Your call"}
+                 "open": "Your call", "info": "Status"}
 ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b[@-Z\\-_]")
 
 
@@ -125,7 +125,8 @@ class Board:
     def card(self, n, it, pr):
         iid = it["id"]
         kind = it.get("kind", "check")
-        v = "open" if kind == "decision" else pr.get("verdict", "untested")
+        # A status card reports where something stands; it has no check to have run.
+        v = "open" if kind == "decision" else "info" if kind == "info" else pr.get("verdict", "untested")
         prio = esc(it.get("priority", ""))
         tags = "".join(f'<span class="chip">{esc(t)}</span>' for t in it.get("tags", []))
         defects = "".join(
@@ -229,7 +230,7 @@ h1,h2,h3{text-wrap:balance;margin:0} a{color:var(--accent)} code{font-size:13px;
 .card[data-verdict="ok"] .state::before{content:"Looks right";color:var(--ok)} .card[data-verdict="issue"] .state::before{content:"Needs work";color:var(--issue)} .card[data-verdict="skip"] .state::before{content:"Skipped";color:var(--skip)}
 .card[data-kind="decision"][data-verdict] .state::before{content:"Chosen: " attr(data-verdict);color:var(--accent)}
 .card-body{display:grid;grid-template-columns:minmax(220px,1fr) minmax(0,1.8fr);gap:18px;padding:6px 18px 14px} @media (max-width:820px){.card-body{grid-template-columns:1fr}}
-.what{margin:0 0 10px;font-weight:600}
+.what{margin:0 0 10px;font-weight:600;white-space:pre-line}
 .proof{margin:0 0 10px;font-size:14px;padding:8px 10px;border-left:3px solid var(--accent);background:var(--chip);border-radius:0 8px 8px 0;white-space:pre-wrap}
 .proof b,.bug b{font-size:11px;letter-spacing:.08em;text-transform:uppercase;display:block;margin-bottom:2px;white-space:normal}
 .bug{margin:0 0 10px;font-size:14px;padding:8px 10px;border-left:3px solid var(--issue);background:var(--chip);border-radius:0 8px 8px 0} .bug.fixed{border-left-color:var(--ok)} .bug.fixed b{color:var(--ok)} .bug.open b{color:var(--issue)}
