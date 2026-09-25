@@ -92,6 +92,13 @@ tool: `file_path` the page, `files` mapping `proof/_m/*` from the site dir, and
 passing capabilities). Republish to the same URL for every round; the owner's verdicts live
 in the database, not in the page, so a republish keeps them.
 
+**Look before you publish.** Render the built page at desktop and phone width and look at
+it: every card's buttons and note field must be usable (the note spans the card), nothing
+overflows, and the page reads as the kind of board it is. With a headless browser at hand,
+`node "$P/scripts/board-layout-check.cjs" board/site/index.html` (env
+`ATELIER_PLAYWRIGHT_CORE`, `ATELIER_HEADLESS_SHELL`) fails on a squeezed note field. A board
+the owner cannot fill in costs a round; a look costs a minute.
+
 Large boards: a publish carries at most 255 files and a version at most 512, so publish the
 page with the first chunk of media (with `capabilities`), then the rest in chunks of 250 with
 `url`, and on a later round publish only the media that changed (keep the list of media

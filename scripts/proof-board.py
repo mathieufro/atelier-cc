@@ -28,6 +28,8 @@ import sys
 VERDICT_LABEL = {"pass": "Proven", "fail": "Defect found", "partial": "Partly proven",
                  "human": "Needs your hands", "blocked": "Blocked", "untested": "Not yet run",
                  "open": "Your call", "info": "Status"}
+NOTE_HINT = {False: "What is wrong, what you expected, or a wish. Saved when you leave the field.",
+             True: "Something else, a condition, or a question. Saved when you leave the field."}
 ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b[@-Z\\-_]")
 
 
@@ -133,7 +135,7 @@ class Board:
             f'<p class="bug {"fixed" if str(d.get("status", "open")).startswith("fixed") else "open"}"><b>Defect, {esc(d.get("status", "open"))}</b>{esc(d.get("text", ""))}</p>'
             for d in pr.get("defects", []))
         ev_html = "".join(self.evidence(iid, ev, i) for i, ev in enumerate(pr.get("evidence", []) or it.get("evidence", [])))
-        if not ev_html:
+        if not ev_html and kind != "decision":
             ev_html = '<p class="nocap">No proof attached yet.</p>'
         by = esc(pr.get("by", ""))
         if kind == "decision":
@@ -157,9 +159,9 @@ class Board:
 <article class="card" id="{esc(iid)}" data-id="{esc(iid)}" data-kind="{kind}" data-group="{esc(slug(it.get("group", "")))}" data-my="{esc(v)}" data-prio="{prio}">
   <header class="card-head"><span class="num">{n}</span><h3>{esc(it.get("title", iid))} <span class="iid">{esc(iid)}</span></h3>
     {f'<span class="chip prio-{prio}">{prio}</span>' if prio else ""}{tags}<span class="my my-{esc(v)}">{esc(VERDICT_LABEL.get(v, v))}</span><span class="state" data-state></span></header>
-  <div class="card-body"><div class="text">{body}</div><div class="shots">{ev_html}</div></div>
+  <div class="card-body{"" if ev_html else " solo"}"><div class="text">{body}</div>{f'<div class="shots">{ev_html}</div>' if ev_html else ""}</div>
   <footer class="verdict"><div class="verdict-row"><div class="btns" role="group" aria-label="Verdict">{btns}</div>
-    <textarea id="note-{esc(iid)}" placeholder="What is wrong, what you expected, or a wish. Saved when you leave the field."></textarea><span class="saved" data-saved></span></div></footer>
+    <textarea id="note-{esc(iid)}" placeholder="{NOTE_HINT[kind == "decision"]}"></textarea><span class="saved" data-saved></span></div></footer>
 </article>'''
 
     def build(self):
@@ -191,11 +193,32 @@ class Board:
             body.append("</section>")
         facts = "".join(f'<div class="fact"><b>{esc(k)}</b>{esc(v)}</div>' for k, v in self.cfg["facts"].items())
         tally = " ".join(f'<span class="t-{k}">{c} {VERDICT_LABEL[k].lower()}</span>' for k, c in counts.items() if c)
-        page = TEMPLATE.replace("%TITLE%", esc(self.cfg["title"])).replace("%INTRO%", esc(self.cfg["intro"])) \
+        decisions_only = all(it.get("kind") == "decision" for it in items)
+        bar = DECISION_BAR if decisions_only else PROOF_BAR
+        if not decisions_only or self.cfg["round_note"]:
+            bar = ROUND_BOX + bar
+        page = TEMPLATE.replace("%BAR%", bar).replace("%TITLE%", esc(self.cfg["title"])).replace("%INTRO%", esc(self.cfg["intro"])) \
             .replace("%FACTS%", facts).replace("%ROUND%", esc(self.cfg["round_note"])).replace("%TALLY%", tally) \
             .replace("%TOTAL%", str(n)).replace("%NAV%", "".join(nav)).replace("%BODY%", "".join(body))
         open(os.path.join(self.site, "index.html"), "w").write(page.replace("�", "?"))
         print(f"cards {n}; my verdicts {json.dumps({k: c for k, c in counts.items() if c})}; page {os.path.join(self.site, 'index.html')}")
+
+
+ROUND_BOX = '<div class="round-note"><p>%ROUND%</p><p class="tally">All %TOTAL% cards: %TALLY%</p></div>\n'
+PROOF_BAR = '''<div class="bar">
+  <div class="progress"><span data-count="done">0</span>of %TOTAL% judged <span class="ok" data-count="ok">0 right</span><span class="issue" data-count="issue">0 need work</span><span class="skip" data-count="skip">0 skipped</span></div>
+  <div class="filters" role="group" aria-label="Filter">
+    <button type="button" data-f="all" aria-pressed="true">All</button><button type="button" data-f="open">Not yet judged</button>
+    <button type="button" data-f="issue">Needs work</button><button type="button" data-f="ok">Looks right</button>
+    <button type="button" data-f="my:fail">My defects</button><button type="button" data-f="my:human">Need your hands</button>
+  </div>
+'''
+DECISION_BAR = '''<div class="bar">
+  <div class="progress"><span data-count="done">0</span>of %TOTAL% chosen</div>
+  <div class="filters" role="group" aria-label="Filter">
+    <button type="button" data-f="all" aria-pressed="true">All</button><button type="button" data-f="open">Not yet chosen</button><button type="button" data-f="chosen">Chosen</button>
+  </div>
+'''
 
 
 TEMPLATE = r'''<title>%TITLE%</title>
@@ -229,7 +252,7 @@ h1,h2,h3{text-wrap:balance;margin:0} a{color:var(--accent)} code{font-size:13px;
 .state{font-size:12px;font-weight:700}
 .card[data-verdict="ok"] .state::before{content:"Looks right";color:var(--ok)} .card[data-verdict="issue"] .state::before{content:"Needs work";color:var(--issue)} .card[data-verdict="skip"] .state::before{content:"Skipped";color:var(--skip)}
 .card[data-kind="decision"][data-verdict] .state::before{content:"Chosen: " attr(data-verdict);color:var(--accent)}
-.card-body{display:grid;grid-template-columns:minmax(220px,1fr) minmax(0,1.8fr);gap:18px;padding:6px 18px 14px} @media (max-width:820px){.card-body{grid-template-columns:1fr}}
+.card-body{display:grid;grid-template-columns:minmax(220px,1fr) minmax(0,1.8fr);gap:18px;padding:6px 18px 14px} @media (max-width:820px){.card-body{grid-template-columns:1fr}} .card-body.solo{grid-template-columns:minmax(0,1fr)} .card-body.solo .text{max-width:80ch}
 .what{margin:0 0 10px;font-weight:600;white-space:pre-line}
 .proof{margin:0 0 10px;font-size:14px;padding:8px 10px;border-left:3px solid var(--accent);background:var(--chip);border-radius:0 8px 8px 0;white-space:pre-wrap}
 .proof b,.bug b{font-size:11px;letter-spacing:.08em;text-transform:uppercase;display:block;margin-bottom:2px;white-space:normal}
@@ -240,11 +263,11 @@ dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:1
 .shot figcaption,.ev figcaption{font-size:13px;color:var(--muted);margin-top:4px;display:flex;align-items:center;flex-wrap:wrap;gap:2px 8px} .openfile{font-size:12px;margin-left:auto}
 .ev{margin:0;flex:1 1 100%} .ev-audio audio{width:100%} .ev-text pre{margin:0;font-size:12px;line-height:1.35;background:var(--chip);border:1px solid var(--line);border-radius:8px;padding:10px;max-height:320px;overflow:auto;white-space:pre-wrap;word-break:break-word}
 .nocap{font-size:14px;color:var(--muted);margin:0;padding:10px 12px;border:1px dashed var(--line);border-radius:8px;flex:1 1 100%}
-.verdict{border-top:1px solid var(--line);padding:12px 18px} .verdict-row{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start} .verdict-row .btns{flex:0 1 auto;max-width:100%} .verdict-row textarea{flex:1 1 320px;min-width:min(100%,260px)}
-.btns{display:flex;gap:6px;flex-wrap:wrap} .btns button{font:inherit;font-size:14px;font-weight:600;padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer;min-height:44px}
+.verdict{border-top:1px solid var(--line);padding:12px 18px} .verdict-row{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
+.btns{display:flex;gap:6px;flex-wrap:wrap} .btns button{font:inherit;font-size:14px;font-weight:600;padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer;min-height:44px} .card[data-kind="decision"] .btns{flex-direction:column;align-items:stretch} .card[data-kind="decision"] .btns button{text-align:left;white-space:normal}
 .btns button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)} .btns button[data-v="ok"][aria-pressed="true"]{background:var(--ok);border-color:var(--ok);color:#fff} .btns button[data-v="issue"][aria-pressed="true"]{background:var(--issue);border-color:var(--issue);color:#fff} .btns button[data-v="skip"][aria-pressed="true"]{background:var(--skip);border-color:var(--skip);color:#fff}
-textarea{width:100%;min-height:64px;font:inherit;font-size:14px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);resize:vertical}
-.saved{font-size:12px;color:var(--muted);align-self:center;min-width:64px;text-align:right} .offline{font-size:13px;color:var(--issue)}
+textarea{box-sizing:border-box;width:100%;min-height:72px;font:inherit;font-size:14px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);resize:vertical}
+.saved{font-size:12px;color:var(--muted);text-align:right;min-height:1em} .offline{font-size:13px;color:var(--issue)}
 .lb{position:fixed;inset:0;z-index:50;background:rgba(10,9,7,.92);display:flex;align-items:center;justify-content:center} .lb[hidden]{display:none}
 .lb-frame{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;overflow:hidden} .lb.zoomed .lb-frame{overflow:auto;align-items:flex-start;justify-content:flex-start}
 .lb-frame img{max-width:100vw;max-height:100vh;object-fit:contain;cursor:zoom-in} .lb.zoomed .lb-frame img{max-width:none;max-height:none;cursor:zoom-out}
@@ -254,14 +277,7 @@ textarea{width:100%;min-height:64px;font:inherit;font-size:14px;padding:8px 10px
 </style>
 <div class="wrap">
 <header class="hero"><h1>%TITLE%</h1><p>%INTRO%</p><div class="facts">%FACTS%</div></header>
-<div class="round-note"><p>%ROUND%</p><p class="tally">All %TOTAL% cards: %TALLY%</p></div>
-<div class="bar">
-  <div class="progress"><span data-count="done">0</span>of %TOTAL% judged <span class="ok" data-count="ok">0 right</span><span class="issue" data-count="issue">0 need work</span><span class="skip" data-count="skip">0 skipped</span></div>
-  <div class="filters" role="group" aria-label="Filter">
-    <button type="button" data-f="all" aria-pressed="true">All</button><button type="button" data-f="open">Not yet judged</button>
-    <button type="button" data-f="issue">Needs work</button><button type="button" data-f="ok">Looks right</button>
-    <button type="button" data-f="my:fail">My defects</button><button type="button" data-f="my:human">Need your hands</button>
-  </div>
+%BAR%
   <span class="offline" data-offline hidden>Verdicts are not saving in this view. Keep going, I will read them from your notes.</span>
 </div>
 <nav class="jump" aria-label="Groups">%NAV%</nav>
@@ -280,10 +296,9 @@ textarea{width:100%;min-height:64px;font:inherit;font-size:14px;padding:8px 10px
   const counts = () => {
     const c = {ok:0, issue:0, skip:0, chosen:0};
     for (const [id, v] of state) { const card = cards.find(x => x.dataset.id === id); if (!v.verdict) continue; if (card && card.dataset.kind === "decision") c.chosen++; else if (c[v.verdict] !== undefined) c[v.verdict]++; }
-    document.querySelector('[data-count="done"]').textContent = c.ok + c.issue + c.skip + c.chosen;
-    document.querySelector('[data-count="ok"]').textContent = c.ok + " right";
-    document.querySelector('[data-count="issue"]').textContent = c.issue + " need work";
-    document.querySelector('[data-count="skip"]').textContent = c.skip + " skipped";
+    const put = (k, t) => { const el = document.querySelector('[data-count="' + k + '"]'); if (el) el.textContent = t; };
+    put("done", c.ok + c.issue + c.skip + c.chosen);
+    put("ok", c.ok + " right"); put("issue", c.issue + " need work"); put("skip", c.skip + " skipped");
   };
   const paint = (card, v) => {
     if (v.verdict) card.dataset.verdict = v.verdict; else delete card.dataset.verdict;
@@ -296,6 +311,7 @@ textarea{width:100%;min-height:64px;font:inherit;font-size:14px;padding:8px 10px
       const v = state.get(card.dataset.id) || {};
       let show = true;
       if (filter === "open") show = !v.verdict;
+      else if (filter === "chosen") show = !!v.verdict;
       else if (filter === "issue" || filter === "ok") show = v.verdict === filter;
       else if (filter.startsWith("my:")) show = card.dataset.my === filter.slice(3);
       card.classList.toggle("hidden", !show);
