@@ -241,3 +241,16 @@ host_finish() {
   [ -z "$(git ls-tree -r --name-only atelier/p9 -- .atelier)" ]
   [ -z "$(git -C "$W" status --porcelain)" ]
 }
+
+@test "F3: host mode triggers on recognised values only; ATELIER_HOST=0.0.0.0 changes nothing" {
+  sec="$(host_section)"
+  [[ "$sec" != *'non-empty host field'* ]]
+  [[ "$sec" == *'shows a recognised host value, never on a value merely being present'* ]]
+  [[ "$sec" == *'`ATELIER_HOST=liaison`, `ATELIER_HOST_FINISH` one of `pr`, `commit`, `none`'* ]]
+  [[ "$sec" == *'Any other value counts as unset: `ATELIER_HOST=0.0.0.0`'* ]]
+  [[ "$(host_finish)" == *'holds a value §0b recognises'* ]]
+  # The hooks: every golden is unchanged with ATELIER_HOST=0.0.0.0 exported.
+  bash "$GOLDEN/run-hooks.sh" "$ROOT" "$TMP/out" ATELIER_HOST=0.0.0.0
+  run diff -r "$GOLDEN/out" "$TMP/out"
+  [ "$status" -eq 0 ]
+}

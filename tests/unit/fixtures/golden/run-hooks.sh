@@ -2,7 +2,7 @@
 # Run four hooks of a plugin tree over the fixture corpus and write one
 # normalised output file per (hook, state) pair.
 #
-#   run-hooks.sh <plugin-root> <out-dir>
+#   run-hooks.sh <plugin-root> <out-dir> [NAME=value ...]
 #
 # Used twice: once against a detached worktree of the commit named in SOURCE to
 # produce the committed goldens (out/), and by host-contract.bats against the
@@ -13,6 +13,9 @@
 set -uo pipefail
 unset ATELIER_AUTONOMY ATELIER_HOST ATELIER_HOST_DONE_TOOL ATELIER_HOST_NEEDS_YOU_TOOL ATELIER_HOST_FINISH
 export HEARTBEAT_EVERY=1
+# Optional NAME=value pairs after <out-dir> are exported on top of the baseline,
+# to prove a hook ignores them (the output must still equal the goldens).
+for kv in "${@:3}"; do export "$kv"; done
 
 plugin="$(cd "$1" && pwd)"
 out="$2"
