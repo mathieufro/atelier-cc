@@ -79,3 +79,110 @@ input() { printf '{"session_id":"sess-A","cwd":"%s","tool_name":"AskUserQuestion
   run diff -r "$GOLDEN/out" "$TMP/out"
   [ "$status" -eq 0 ]
 }
+
+# --- The command file (AC-3). Hooks never run below Open in a host, so the
+# contract is carried by commands/atelier.md prose. Without the env the prose
+# must read exactly as at the commit in fixtures/golden/SOURCE: every host-mode
+# addition is either §0b or a paragraph naming an ATELIER_* variable, plus the
+# five fields appended to Frame's echo.
+
+CMD_ECHO_FIELDS='|${ATELIER_AUTONOMY:-}|${ATELIER_HOST:-}|${ATELIER_HOST_DONE_TOOL:-}|${ATELIER_HOST_NEEDS_YOU_TOOL:-}|${ATELIER_HOST_FINISH:-}'
+
+# Print <file> with the host-mode prose removed: the five echo fields, the
+# "## 0b." section, and every blank-line-delimited paragraph naming ATELIER_.
+strip_host() {
+  awk -v fields="$CMD_ECHO_FIELDS" '
+    function flush() {
+      if (n == 0) return
+      if (para ~ /^## /) skip = (para ~ /^## 0b\./)
+      if (!skip && para !~ /ATELIER_/) printf "%s", buf
+      n = 0; para = ""; buf = ""
+    }
+    {
+      i = index($0, fields)
+      if (i) $0 = substr($0, 1, i - 1) substr($0, i + length(fields))
+      buf = buf $0 "\n"
+      if ($0 == "") { flush(); next }
+      para = (n ? para "\n" : "") $0; n++
+    }
+    END { flush() }
+  ' "$1"
+}
+# The §0b section of atelier.md.
+host_section() { awk '/^## 0b\./{on=1; print; next} on && /^## /{exit} on' "$ROOT/commands/atelier.md"; }
+# The §4 paragraph that finishes for the host.
+host_finish() {
+  awk 'BEGIN{RS=""} /^## 4\./{s4=1} s4 && /ATELIER_HOST_FINISH/ && /ATELIER_HOST_DONE_TOOL/{print; exit}' "$ROOT/commands/atelier.md"
+}
+
+@test "S37: Frame's echo line names all five ATELIER_* variables" {
+  line="$(grep -E '^1\. `Bash`: `echo "\$CLAUDE_CODE_SESSION_ID\|' "$ROOT/commands/atelier.md")"
+  [ -n "$line" ]
+  for v in ATELIER_AUTONOMY ATELIER_HOST ATELIER_HOST_DONE_TOOL ATELIER_HOST_NEEDS_YOU_TOOL ATELIER_HOST_FINISH; do
+    [[ "$line" == *"|\${$v:-}"* ]]
+  done
+  [[ "$line" == *"\$(openssl rand -hex 2)${CMD_ECHO_FIELDS}\""* ]]
+}
+
+@test "S37: atelier.md documents boards[] with title and url" {
+  sec="$(host_section)"
+  [[ "$sec" == *'boards: [{title, url}]'* ]]
+  [[ "$sec" == *'https:'* ]]
+}
+
+@test "S37: §0b states the autonomous Brainstorm, the blocker path and the Liaison fan-out limits" {
+  sec="$(host_section)"
+  [[ "$sec" == *'Applies only when'* ]]
+  [[ "$sec" == *'`ATELIER_AUTONOMY=autonomous`'* ]]
+  [[ "$sec" == *'Assumptions:'* ]]
+  [[ "$sec" == *'brief.md'* ]]
+  [[ "$sec" == *'`awaiting` never becomes `"user"`'* ]]
+  [[ "$sec" == *'`ATELIER_HOST_NEEDS_YOU_TOOL` is set, call that tool with the reason'* ]]
+  [[ "$sec" == *'set `awaiting:"user"` with the reason in `failure.reason`'* ]]
+  [[ "$sec" == *'`ATELIER_HOST=liaison`'* ]]
+  for t in Workflow Monitor SendMessage TaskStop; do [[ "$sec" == *"\`$t\`"* ]]; done
+  [[ "$sec" == *'at most 4 at once'* ]]
+  # Brainstorm (§3) and the brainstorming skill point at §0b.
+  grep -q 'ATELIER_AUTONOMY=autonomous.*§0b' "$ROOT/commands/atelier.md"
+  grep -q 'ATELIER_AUTONOMY=autonomous.*§0b' "$ROOT/skills/brainstorming/SKILL.md"
+}
+
+@test "S39: with every ATELIER_* name removed from atelier.md's host-mode section, the remaining text equals the 8c4d96a file plus the one Frame field addition" {
+  grep -q '^## 0b\. Host mode' "$ROOT/commands/atelier.md"
+  [ "$(strip_host "$ROOT/commands/atelier.md" | grep -c . )" -lt "$(grep -c . "$ROOT/commands/atelier.md")" ]
+  run diff <(strip_host "$ROOT/commands/atelier.md") "$GOLDEN/atelier.md@8c4d96a"
+  [ "$status" -eq 0 ]
+}
+
+@test "S39: the brainstorming skill without its host pointer equals 8c4d96a, and no other command or skill names a host variable" {
+  grep -q 'ATELIER_' "$ROOT/skills/brainstorming/SKILL.md"
+  run diff <(strip_host "$ROOT/skills/brainstorming/SKILL.md") "$GOLDEN/brainstorming-SKILL.md@8c4d96a"
+  [ "$status" -eq 0 ]
+  run bash -c 'grep -rlE "ATELIER_(AUTONOMY|HOST)" "$@" | sort' _ "$ROOT/commands" "$ROOT/skills" "$ROOT/docs"
+  [ "$output" = "$(printf '%s\n%s' "$ROOT/commands/atelier.md" "$ROOT/skills/brainstorming/SKILL.md")" ]
+}
+
+@test "S57: §4-host stages with the ':!.atelier' exclusion and never passes handoff.md as the PR body" {
+  fin="$(host_finish)"
+  [ -n "$fin" ]
+  [[ "$fin" == *"git add -A -- . ':!.atelier'"* ]]
+  [[ "$fin" == *'--body-file <a new file outside .atelier>'* ]]
+  [[ "$fin" == *'never `handoff.md` itself'* ]]
+  [[ "$fin" != *'--body-file handoff.md'* ]]
+  [[ "$fin" != *'--body-file .atelier'* ]]
+  # A40: never a commit on the default or a protected branch.
+  [[ "$fin" == *'`git switch -c atelier/<id>` (no start point, no other flag)'* ]]
+  [[ "$fin" == *'`git worktree add .atelier/worktrees/<id> -b atelier/<id>`'* ]]
+  for b in main master trunk develop production; do [[ "$fin" == *"\`$b\`"* ]]; done
+  # D32: a failed push or PR is never complete; the done tool carries summary and prUrl.
+  [[ "$fin" == *'If the push or the PR fails, call the tool named by `ATELIER_HOST_NEEDS_YOU_TOOL` with the error'* ]]
+  [[ "$fin" == *'never set `status:"complete"` without the PR'* ]]
+  [[ "$fin" == *'`summary` = the handoff'"'"'s first line and `prUrl` = the PR'"'"'s URL'* ]]
+  for m in '`ATELIER_HOST_FINISH=pr`' '`ATELIER_HOST_FINISH=commit`' '`none`'; do [[ "$fin" == *"$m"* ]]; done
+}
+
+@test "S57: §4-host states the title/body publication rule" {
+  fin="$(host_finish)"
+  [[ "$fin" == *'The title and body follow the same rules as the code: no absolute or home-relative local paths, no session ids, no names the repository'"'"'s checks forbid'* ]]
+  [[ "$fin" == *'the handoff'"'"'s summary written for the PR'* ]]
+}

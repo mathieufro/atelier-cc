@@ -20,6 +20,15 @@ where the rung says a phase is one line deep, it is one line deep.
 - **Delegation is by the precepts**: name every model, opus for anything the spec does not fully determine, haiku for sweeps, skeptics on opus, depth two at most. You do the work yourself when it is small or already in your context.
 - **You drive from the main workspace cwd.** A worktree, if any, is for code changes and is passed to subagents.
 
+## 0b. Host mode
+
+Applies only when Frame's echo (§2 step 1) shows a non-empty host field: `ATELIER_AUTONOMY`, `ATELIER_HOST`, `ATELIER_HOST_DONE_TOOL`, `ATELIER_HOST_NEEDS_YOU_TOOL`, `ATELIER_HOST_FINISH`. With all five empty, skip this section and the paragraphs that name them: the run is exactly the one the rest of this file describes. A host (an app that runs Atelier sessions for its owner) sets them; for that run, this section wins over the rest of the file.
+
+- **`ATELIER_AUTONOMY=autonomous`** (that exact value; any other is ignored): nobody answers questions in this session. Brainstorm is one line: your reading of the task and the design you chose, then an `Assumptions:` list (each a sensible, reversible default you took where you would have asked) appended to `brief.md`. `awaiting` never becomes `"user"`, in Brainstorm or at a gate: a gate takes its recommended default, recorded in the gate file and in the brief's assumptions. No question in prose or through `AskUserQuestion`. A genuine blocker (no workable default: an absent prerequisite, a missing credential): when `ATELIER_HOST_NEEDS_YOU_TOOL` is set, call that tool with the reason and end the turn; when it is unset, set `awaiting:"user"` with the reason in `failure.reason`, write `state.json`, and end the turn.
+- **`ATELIER_HOST=liaison`**: the tools `Workflow`, `Monitor`, `SendMessage` and `TaskStop` are unavailable. Every fan-out, including those §3 sends through the Workflow tool, is in-turn `Agent` calls launched in one message, at most 4 at once (more agents: successive batches); `awaiting:"workflow"` is never set.
+- **Boards**: whenever a board is published, `state.json` carries `boards: [{title, url}]`, one entry per published board, `url` its `https:` link.
+- **`ATELIER_HOST_FINISH`, `ATELIER_HOST_DONE_TOOL`**: Handoff finishes for the host (§4, host finish).
+
 ## 1. Route
 
 - `status` → table of `.atelier/pipelines/*/state.json` (id, rung, phase, status), end turn.
@@ -29,7 +38,7 @@ where the rung says a phase is one line deep, it is one line deep.
 
 ## 2. Frame
 
-1. `Bash`: `echo "$CLAUDE_CODE_SESSION_ID|$(date +%F)|$(openssl rand -hex 2)"`; `id = <date>-<slug>-<4hex>`.
+1. `Bash`: `echo "$CLAUDE_CODE_SESSION_ID|$(date +%F)|$(openssl rand -hex 2)|${ATELIER_AUTONOMY:-}|${ATELIER_HOST:-}|${ATELIER_HOST_DONE_TOOL:-}|${ATELIER_HOST_NEEDS_YOU_TOOL:-}|${ATELIER_HOST_FINISH:-}"`; `id = <date>-<slug>-<4hex>`.
 2. **Ground once.** Read what the task touches: the files, the tests around them, the conventions file, the last ledger in `.atelier/` if this continues earlier work. At R3 and above, this grounding is itself a sweep (haiku readers, one schema, you synthesise).
 3. **Pick the rung** from the five signals (subsystems touched, unknowns, user-visible surface, fits one context, width). R0 trivial · R1 small · R2 feature · R3 wide · R4 epic. When two rungs fit, take the lower one and let the phase-boundary check climb it.
 4. **Estimate the budget** in tokens and wall clock, honestly. It goes in the brief. Passing twice the estimate is a stop-and-reframe signal, not a reason to hurry.
@@ -52,6 +61,8 @@ For each phase from `phase`, in order: read its skill, run it at the rung's dept
 
 **Brainstorm is the only interactive phase.** Set `awaiting:"user"` once when it starts and leave it set until the artifact is approved; talk in plain prose, one question per turn, always with a recommendation. When approved, one write: `awaiting:null`, `done[]`, `phase`.
 
+Under a host that sets `ATELIER_AUTONOMY=autonomous`, Brainstorm is the one line of §0b instead and `awaiting` stays `null`.
+
 **Fan-outs.** A sweep or a document review of more than a handful of agents goes through the Workflow tool: set `awaiting:"workflow"`, write `state.json`, launch; when it returns, set `awaiting:null` first, then read the result. Fewer agents: Agent calls launched in one message, in-turn. Sweep agents are haiku or sonnet with a fixed answer schema; you synthesise.
 
 **Review findings** are fixed once (by you or a fixer) with a disposition per finding in a fix ledger, then the flow advances. No re-review of the same document; the batch skeptic during Execute and the Validate phase are the nets. Never lower the bar to pass a review: the spec is the contract.
@@ -63,6 +74,12 @@ For each phase from `phase`, in order: read its skill, run it at the rung's dept
 ## 4. Finish
 
 When Validate is done, write `handoff.md` (outcome first, what is proven with evidence paths, what remains unverified, what to try first), append `handoff` to `done[]`, set `status:"complete"`, write `state.json` once, and end the turn with the handoff's first lines as your reply. Under ten lines.
+
+**Host finish**, only when `ATELIER_HOST_FINISH` or `ATELIER_HOST_DONE_TOOL` is set (skip this paragraph otherwise). It runs after `handoff.md` is written and before the `state.json` write that sets `status:"complete"`, in this order:
+- `ATELIER_HOST_FINISH=pr`: run the repository's own boundary and pre-PR checks if it names any (CLAUDE.md, CONTRIBUTING, a `check` or `lint` script) and fix what they report, or report what you cannot fix. Get a branch of the pipeline's own: if the pipeline works in its own worktree branch, use it; else if the current branch is the default branch or a protected name (`main`, `master`, `trunk`, `develop`, `production`), first `git switch -c atelier/<id>` (no start point, no other flag), and if the host refuses that, `git worktree add .atelier/worktrees/<id> -b atelier/<id>` and finish there. Stage the change only, never the pipeline records: `git add -A -- . ':!.atelier'`. Commit. `git push origin <branch>`. Open the PR with `gh pr create --title "<title>" --body-file <a new file outside .atelier>` (on GitLab, `glab mr create`). The body is the handoff's summary written for the PR (the outcome, what was tested), never `handoff.md` itself, which holds local evidence paths. The title and body follow the same rules as the code: no absolute or home-relative local paths, no session ids, no names the repository's checks forbid.
+- `ATELIER_HOST_FINISH=commit`: the same checks, branch and staging rules, then commit only: no push, no PR. `none`: leave the changes uncommitted.
+- If the push or the PR fails, call the tool named by `ATELIER_HOST_NEEDS_YOU_TOOL` with the error and end the turn (when it is unset, set `awaiting:"user"` with the error in `failure.reason`); never set `status:"complete"` without the PR.
+- When `ATELIER_HOST_DONE_TOOL` is set, call that tool with `summary` = the handoff's first line and `prUrl` = the PR's URL (no `prUrl` for `commit` or `none`); then write `state.json` with `status:"complete"` as above.
 
 `status:"failed"` is the last resort: a hard blocker with no workable default (a prerequisite that is truly absent). Write `failure:{phase,reason,lastError}` naming it, and stop.
 

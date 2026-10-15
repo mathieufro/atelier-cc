@@ -53,6 +53,22 @@ Migration from the previous pipeline types: [docs/migration.md](docs/migration.m
 
 All four read `state.json` (id, rung, phase, plan, done, status, awaiting) and never write it.
 
+## Host contract
+
+An app that runs Atelier sessions for its owner (Liaison, for one) can set five environment
+variables. Frame echoes them, and `commands/atelier.md` §0b and §4 say what each changes.
+With none set, Atelier reads and behaves exactly as in plain Claude Code.
+
+| Variable | Effect |
+|-|-|
+| `ATELIER_AUTONOMY=autonomous` | Brainstorm is one line with its assumptions in `brief.md`; no question, `awaiting` never `"user"` except a genuine blocker; the ask-guard denies every `AskUserQuestion` |
+| `ATELIER_HOST=liaison` | `Workflow`, `Monitor`, `SendMessage`, `TaskStop` unavailable: fan-outs are in-turn `Agent` calls, at most 4 at once |
+| `ATELIER_HOST_NEEDS_YOU_TOOL` | the tool a genuine blocker, or a failed push or PR, is reported through |
+| `ATELIER_HOST_FINISH` | `pr`, `commit` or `none`: Handoff runs the repository's checks, commits on a branch of its own (never `.atelier/`), pushes and opens the PR |
+| `ATELIER_HOST_DONE_TOOL` | the tool Handoff calls at the end, with `summary` and `prUrl` |
+
+In host mode `state.json` also carries `boards: [{title, url}]` for the published boards.
+
 ## Layout
 
 ```
