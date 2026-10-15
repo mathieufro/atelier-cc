@@ -72,9 +72,13 @@ input() { printf '{"session_id":"sess-A","cwd":"%s","tool_name":"AskUserQuestion
   [[ "$output" != *"host contract"* ]]
 }
 
-@test "S39: without the env, ask-guard, stop, post-tool-use and session-start print exactly the golden output for each fixture state" {
+@test "S39: without the env, ask-guard, stop, post-tool-use and session-start print exactly the golden output for each fixture state and source" {
   [ -f "$GOLDEN/SOURCE" ]
-  [ "$(ls "$GOLDEN/out" | wc -l | tr -d ' ')" -eq 28 ]
+  [ "$(ls "$GOLDEN/out" | wc -l | tr -d ' ')" -eq 48 ]
+  # The corpus covers a legitimate complete and session-start startup/resume (F7).
+  [ -f "$GOLDEN/out/stop.complete-handoff.out" ]
+  [ -f "$GOLDEN/out/session-start@startup.running-null.out" ]
+  [ -f "$GOLDEN/out/session-start@resume.running-null.out" ]
   bash "$GOLDEN/run-hooks.sh" "$ROOT" "$TMP/out"
   run diff -r "$GOLDEN/out" "$TMP/out"
   [ "$status" -eq 0 ]
@@ -287,4 +291,12 @@ host_finish() {
   line="$(grep -E '^1\. `Bash`: `echo "\$CLAUDE_CODE_SESSION_ID\|' "$ROOT/commands/atelier.md")"
   body="${line#*echo \"}"; body="${body%%\"*}"
   [ "$(printf '%s' "$body" | awk -F'|' '{print NF}')" -eq 8 ]
+}
+
+@test "F7: with all five host variables set, stop, post-tool-use and session-start still print exactly the goldens" {
+  bash "$GOLDEN/run-hooks.sh" "$ROOT" "$TMP/out" ATELIER_AUTONOMY=autonomous ATELIER_HOST=liaison \
+    ATELIER_HOST_DONE_TOOL=mcp__liaison_session__mark_done ATELIER_HOST_NEEDS_YOU_TOOL=mcp__liaison_session__needs_you ATELIER_HOST_FINISH=pr
+  [ "$(ls "$TMP/out" | grep -vc '^ask-guard\.')" -eq 40 ]
+  run diff -r -x 'ask-guard.*' "$GOLDEN/out" "$TMP/out"
+  [ "$status" -eq 0 ]
 }

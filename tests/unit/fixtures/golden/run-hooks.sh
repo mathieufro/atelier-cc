@@ -25,7 +25,10 @@ mkdir -p "$out"
 states=(no-pipeline)
 for f in "$here"/states/*.json; do states+=("$(basename "$f" .json)"); done
 
-for hook in ask-guard stop post-tool-use session-start; do
+# session-start also runs with source startup and resume (files session-start@<source>.<state>.out).
+for hook in ask-guard stop post-tool-use session-start session-start@startup session-start@resume; do
+  script="${hook%@*}"
+  src="compact"; [ "$script" = "$hook" ] || src="${hook#*@}"
   for st in "${states[@]}"; do
     ws="$(mktemp -d)"
     ws_real="$(cd "$ws" && pwd -P)"
@@ -35,8 +38,8 @@ for hook in ask-guard stop post-tool-use session-start; do
       mkdir -p "$ws/.atelier/pipelines/p1"
       cp "$here/states/$st.json" "$ws/.atelier/pipelines/p1/state.json"
     fi
-    input="{\"session_id\":\"sess-A\",\"cwd\":\"$ws\",\"source\":\"compact\",\"tool_name\":\"AskUserQuestion\"}"
-    res="$(printf '%s' "$input" | bash "$plugin/hooks/$hook.sh" 2>&1; printf '\nexit=%s' "$?")"
+    input="{\"session_id\":\"sess-A\",\"cwd\":\"$ws\",\"source\":\"$src\",\"tool_name\":\"AskUserQuestion\"}"
+    res="$(printf '%s' "$input" | bash "$plugin/hooks/$script.sh" 2>&1; printf '\nexit=%s' "$?")"
     res="${res//"$ws_real"/@ROOT@}"
     res="${res//"$ws"/@ROOT@}"
     res="${res//"$plugin"/@PLUGIN@}"
