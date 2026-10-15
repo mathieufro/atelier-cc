@@ -70,6 +70,8 @@ tests/unit/*.bats        hook tests (bats tests/unit)
 bats tests/unit          # or tests/bats/bin/bats after git submodule update --init
 ```
 
+CI runs the suite on Linux and macOS, with and without the autonomous-host environment set.
+
 ## Related
 
 - [atelier](https://github.com/mathieufro/atelier): the VS Code version, with its own server and multi-backend support.
