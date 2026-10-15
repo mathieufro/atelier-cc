@@ -268,3 +268,11 @@ host_finish() {
   run diff <(strip_host "$ROOT/skills/boards/SKILL.md") "$GOLDEN/boards-SKILL.md@8c4d96a"
   [ "$status" -eq 0 ]
 }
+
+@test "F5: the pushed branch is checked against the default branch and protected names case-folded, and never force-pushed" {
+  fin="$(host_finish)"
+  for b in staging 'release/*'; do [[ "$fin" == *"\`$b\`"* ]]; done
+  [[ "$fin" == *'never the default branch (`git symbolic-ref --short refs/remotes/origin/HEAD`, without its `origin/`) nor a protected name, both compared case-folded (`Main` is `main`), whichever way it was obtained'* ]]
+  [[ "$fin" == *'the only push is `git push origin <branch>` of that branch, never forced'* ]]
+  [[ "$fin" != *'--force'* && "$fin" != *'push -f'* ]]
+}
