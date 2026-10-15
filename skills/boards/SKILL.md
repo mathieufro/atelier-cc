@@ -162,6 +162,8 @@ then transcribe verbatim with the date. Never write, edit or fabricate a sign-of
 polls the file between tasks and keeps working on what the gate does not block. A gate that
 blocks the whole flow is the one case where `awaiting:"user"` is set outside Brainstorm.
 
+When Frame's echo shows `ATELIER_AUTONOMY=autonomous` (a host runs the session unattended), follow atelier.md §0b instead: the gate file is still written for the owner with VERDICT and SIGNED blank, since an autonomous run never writes them, and the run proceeds on the recommended option without setting `awaiting:"user"`.
+
 ## Privacy
 
 Tracked run docs and boards carry no serials, licence keys, provisioning ids, customer data

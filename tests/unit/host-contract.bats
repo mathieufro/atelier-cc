@@ -89,13 +89,15 @@ input() { printf '{"session_id":"sess-A","cwd":"%s","tool_name":"AskUserQuestion
 CMD_ECHO_FIELDS='|${ATELIER_AUTONOMY:-}|${ATELIER_HOST:-}|${ATELIER_HOST_DONE_TOOL:-}|${ATELIER_HOST_NEEDS_YOU_TOOL:-}|${ATELIER_HOST_FINISH:-}'
 
 # Print <file> with the host-mode prose removed: the five echo fields, the
-# "## 0b." section, and every blank-line-delimited paragraph naming ATELIER_.
+# "## 0b." section, and every blank-line-delimited paragraph naming a host
+# variable (ATELIER_AUTONOMY or ATELIER_HOST*; other ATELIER_ names such as
+# ATELIER_PLAYWRIGHT_CORE predate the host contract and stay).
 strip_host() {
   awk -v fields="$CMD_ECHO_FIELDS" '
     function flush() {
       if (n == 0) return
       if (para ~ /^## /) skip = (para ~ /^## 0b\./)
-      if (!skip && para !~ /ATELIER_/) printf "%s", buf
+      if (!skip && para !~ /ATELIER_(AUTONOMY|HOST)/) printf "%s", buf
       n = 0; para = ""; buf = ""
     }
     {
@@ -159,7 +161,7 @@ host_finish() {
   run diff <(strip_host "$ROOT/skills/brainstorming/SKILL.md") "$GOLDEN/brainstorming-SKILL.md@8c4d96a"
   [ "$status" -eq 0 ]
   run bash -c 'grep -rlE "ATELIER_(AUTONOMY|HOST)" "$@" | sort' _ "$ROOT/commands" "$ROOT/skills" "$ROOT/docs"
-  [ "$output" = "$(printf '%s\n%s' "$ROOT/commands/atelier.md" "$ROOT/skills/brainstorming/SKILL.md")" ]
+  [ "$output" = "$(printf '%s\n%s\n%s' "$ROOT/commands/atelier.md" "$ROOT/skills/boards/SKILL.md" "$ROOT/skills/brainstorming/SKILL.md")" ]
 }
 
 @test "S57: §4-host stages with the ':!.atelier' exclusion and never passes handoff.md as the PR body" {
@@ -252,5 +254,17 @@ host_finish() {
   # The hooks: every golden is unchanged with ATELIER_HOST=0.0.0.0 exported.
   bash "$GOLDEN/run-hooks.sh" "$ROOT" "$TMP/out" ATELIER_HOST=0.0.0.0
   run diff -r "$GOLDEN/out" "$TMP/out"
+  [ "$status" -eq 0 ]
+}
+
+@test "F4: under autonomy a gate file is written for the owner with VERDICT/SIGNED blank, and the boards skill points at §0b" {
+  sec="$(host_section)"
+  [[ "$sec" == *'a gate is still written as a gate file for the owner (`boards` skill), with `VERDICT:` and `SIGNED:` left blank, since an autonomous run never writes them'* ]]
+  [[ "$sec" == *'proceeds on the gate'"'"'s recommended option and records that choice in the brief'"'"'s `Assumptions:`'* ]]
+  [[ "$sec" == *'Under autonomy a gate is never a genuine blocker.'* ]]
+  [[ "$sec" != *'a gate takes its recommended default, recorded in the gate file'* ]]
+  grep -q 'ATELIER_AUTONOMY=autonomous.*§0b.*VERDICT and SIGNED blank.*never writes them' "$ROOT/skills/boards/SKILL.md"
+  # Without its pointer, the boards skill reads exactly as at 8c4d96a.
+  run diff <(strip_host "$ROOT/skills/boards/SKILL.md") "$GOLDEN/boards-SKILL.md@8c4d96a"
   [ "$status" -eq 0 ]
 }
