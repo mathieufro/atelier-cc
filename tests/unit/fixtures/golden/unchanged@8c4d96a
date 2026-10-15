@@ -1,0 +1,13 @@
+5c67520e9bb0bc1d891f1a3bdf485053c34ace16 docs/design.md
+7969ddc17e6a7480ab9592d8b3b0df806838ac4d docs/migration.md
+584cfe4e7d60ff7f1caa057001121d739d4c9ff9 docs/precepts.md
+35cc2253be391ee06fa28e274e84e4813944ea8c hooks/hooks.json
+05f236deef86f73a5449c22d3cb44bdd3c3f10da hooks/post-tool-use.sh
+fc24b655ee8e54967ae2a4b9262b74453b3974ff hooks/session-start.sh
+7632096e55796e9bd7e9b751a429c4117b0aaa35 hooks/stop.sh
+d7b54feb4875f042827d2ab5e837b5a7e93de98b scripts/board-layout-check.cjs
+a98c7855c1d06a78c9dc0c066ddb390eb6dc3fb0 scripts/proof-board.py
+3279574dcb3d68b081dd0464192598847ec1c4c9 skills/executing/SKILL.md
+0ee4a43746079e079de1ec510fff4826e39ad826 skills/reviewing/SKILL.md
+8a3f4ddb514785cdeec8d0568ce9f625925d9cde skills/speccing/SKILL.md
+3a174fb4050a3af8fc2a5f35b1d7fd623faea402 skills/validating/SKILL.md

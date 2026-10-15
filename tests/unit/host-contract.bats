@@ -300,3 +300,15 @@ host_finish() {
   run diff -r -x 'ask-guard.*' "$GOLDEN/out" "$TMP/out"
   [ "$status" -eq 0 ]
 }
+
+@test "F8: every command, skill, doc, script, hook and lib file the host contract does not touch is byte-identical to 8c4d96a" {
+  manifest="$GOLDEN/unchanged@8c4d96a"
+  [ "$(wc -l < "$manifest" | tr -d ' ')" -ge 13 ]
+  while read -r blob path; do
+    [ "$(git hash-object "$ROOT/$path")" = "$blob" ] || { echo "changed since 8c4d96a: $path"; return 1; }
+  done < "$manifest"
+  # No file was added either: each one is pinned or one of the five the contract edits.
+  allowed="$(printf '%s\n' commands/atelier.md hooks/ask-guard.sh lib/common.sh skills/boards/SKILL.md skills/brainstorming/SKILL.md; awk '{print $2}' "$manifest")"
+  run bash -c 'cd "$1" && find commands skills docs scripts hooks lib -type f | sort' _ "$ROOT"
+  [ "$output" = "$(printf '%s\n' "$allowed" | sort)" ]
+}
