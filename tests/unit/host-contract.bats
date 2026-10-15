@@ -276,3 +276,15 @@ host_finish() {
   [[ "$fin" == *'the only push is `git push origin <branch>` of that branch, never forced'* ]]
   [[ "$fin" != *'--force'* && "$fin" != *'push -f'* ]]
 }
+
+@test "F6: both tool names are used only when they match the mcp__ pattern, and a field containing | voids the host fields" {
+  sec="$(host_section)"
+  [[ "$sec" == *'`ATELIER_HOST_DONE_TOOL` or `ATELIER_HOST_NEEDS_YOU_TOOL` that matches `^mcp__[A-Za-z0-9_]+__[A-Za-z0-9_]+$` (a tool name that does not is never called)'* ]]
+  [[ "$sec" == *'The echo has eight `|`-separated fields; if it shows more, a value contains `|`, and every host field counts as unset.'* ]]
+  # The prose pattern is the one the ask-guard enforces.
+  grep -qF '^mcp__[A-Za-z0-9_]+__[A-Za-z0-9_]+$' "$ROOT/hooks/ask-guard.sh"
+  # And the echo really has eight fields.
+  line="$(grep -E '^1\. `Bash`: `echo "\$CLAUDE_CODE_SESSION_ID\|' "$ROOT/commands/atelier.md")"
+  body="${line#*echo \"}"; body="${body%%\"*}"
+  [ "$(printf '%s' "$body" | awk -F'|' '{print NF}')" -eq 8 ]
+}
