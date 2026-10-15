@@ -186,3 +186,28 @@ host_finish() {
   [[ "$fin" == *'The title and body follow the same rules as the code: no absolute or home-relative local paths, no session ids, no names the repository'"'"'s checks forbid'* ]]
   [[ "$fin" == *'the handoff'"'"'s summary written for the PR'* ]]
 }
+
+@test "F1: every needs-you path sets awaiting:user and writes state.json before ending the turn, and the Stop hook allows that state" {
+  n=0
+  while IFS= read -r line; do
+    n=$((n + 1))
+    before="${line%%end the turn*}"
+    [[ "$before" == *'set `awaiting:"user"`'* ]]
+    [[ "$before" == *'write `state.json`'* ]]
+  done < <(grep 'ATELIER_HOST_NEEDS_YOU_TOOL' "$ROOT/commands/atelier.md" | grep 'end the turn')
+  [ "$n" -eq 2 ]
+  # The state that prose prescribes: running, awaiting "user", reason in failure.
+  printf '{"id":"p1","rung":2,"sourceSessionId":"sess-A","status":"running","awaiting":"user","phase":"execute","failure":{"reason":"needs a credential"}}\n' > "$SP"
+  run bash -c 'printf "%s" "$1" | ATELIER_AUTONOMY=autonomous ATELIER_HOST_NEEDS_YOU_TOOL=mcp__liaison_session__needs_you bash "$2"' _ "{\"session_id\":\"sess-A\",\"cwd\":\"$TMP\"}" "$ROOT/hooks/stop.sh"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  # Calling the tool alone leaves running/null, which the Stop hook blocks.
+  mkstate sess-A running null
+  run bash -c 'printf "%s" "$1" | bash "$2"' _ "{\"session_id\":\"sess-A\",\"cwd\":\"$TMP\"}" "$ROOT/hooks/stop.sh"
+  [[ "$output" == *'"block"'* ]]
+  # The ask-guard's deny reason prescribes the same write after the tool call.
+  mkstate sess-A running null
+  run bash -c 'printf "%s" "$1" | ATELIER_AUTONOMY=autonomous ATELIER_HOST_NEEDS_YOU_TOOL=mcp__liaison_session__needs_you bash "$2"' _ "$(input)" "$HOOK"
+  reason="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecisionReason')"
+  [[ "$reason" == *'call mcp__liaison_session__needs_you with the reason, then set awaiting:"user" with the reason in failure.reason, write state.json and end the turn'* ]]
+}

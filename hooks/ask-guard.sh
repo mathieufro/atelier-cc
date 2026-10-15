@@ -41,9 +41,9 @@ input="$(cat)"
 if atelier_autonomous; then
   needs_you="${ATELIER_HOST_NEEDS_YOU_TOOL:-}"
   if [[ "$needs_you" =~ ^mcp__[A-Za-z0-9_]+__[A-Za-z0-9_]+$ ]]; then
-    blocked="call ${needs_you} with the reason"
+    blocked="call ${needs_you} with the reason, then set awaiting:\"user\" with the reason in failure.reason, write state.json and end the turn"
   else
-    blocked='set awaiting:"user" with the reason in failure.reason'
+    blocked='set awaiting:"user" with the reason in failure.reason, write state.json and end the turn'
   fi
   reason="Atelier host contract: this session is autonomous (ATELIER_AUTONOMY). Decide with the sensible default and record the assumption in brief.md. If you are truly blocked, ${blocked}."
   jq -nc --arg r "$reason" '{
