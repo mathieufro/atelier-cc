@@ -172,7 +172,7 @@ host_finish() {
   [[ "$fin" != *'--body-file .atelier'* ]]
   # A40: never a commit on the default or a protected branch.
   [[ "$fin" == *'`git switch -c atelier/<id>` (no start point, no other flag)'* ]]
-  [[ "$fin" == *'`git worktree add .atelier/worktrees/<id> -b atelier/<id>`'* ]]
+  [[ "$fin" == *'git worktree add .atelier/worktrees/<id> -b atelier/<id> "$C"`'* ]]
   for b in main master trunk develop production; do [[ "$fin" == *"\`$b\`"* ]]; done
   # D32: a failed push or PR is never complete; the done tool carries summary and prUrl.
   [[ "$fin" == *'If the push or the PR fails, call the tool named by `ATELIER_HOST_NEEDS_YOU_TOOL` with the error'* ]]
@@ -210,4 +210,34 @@ host_finish() {
   run bash -c 'printf "%s" "$1" | ATELIER_AUTONOMY=autonomous ATELIER_HOST_NEEDS_YOU_TOOL=mcp__liaison_session__needs_you bash "$2"' _ "$(input)" "$HOOK"
   reason="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecisionReason')"
   [[ "$reason" == *'call mcp__liaison_session__needs_you with the reason, then set awaiting:"user" with the reason in failure.reason, write state.json and end the turn'* ]]
+}
+
+@test "F2: the protected-branch fallback carries the uncommitted change onto atelier/<id> and leaves the checkout untouched" {
+  cmd="$(host_finish | sed -n 's/.*if the host refuses that, [^`]*`\([^`]*\)`.*/\1/p')"
+  [ -n "$cmd" ]
+  [[ "$cmd" != *stash* && "$cmd" != *reset* && "$cmd" != *checkout* ]]
+  cmd="${cmd//<id>/p9}"; cmd="${cmd//<title>/Fallback}"
+  R="$TMP/repo"; mkdir -p "$R"; cd "$R"
+  git init -q -b main .
+  git config user.email t@example.com; git config user.name T
+  printf 'a\n' > kept; printf 'b\n' > gone; git add -A; git commit -qm base
+  base="$(git rev-parse HEAD)"
+  printf 'a2\n' > kept; rm gone; printf 'new\n' > added
+  mkdir -p .atelier/pipelines/p9; printf '{}' > .atelier/pipelines/p9/state.json
+  before="$(git status --porcelain)"
+  run bash -c "$cmd"
+  [ "$status" -eq 0 ]
+  # The current branch and checkout are as they were.
+  [ "$(git rev-parse HEAD)" = "$base" ]
+  [ "$(git symbolic-ref --short HEAD)" = main ]
+  [ "$(git status --porcelain -- . ':!.atelier')" = "$(printf '%s\n' "$before" | grep -v '\.atelier')" ]
+  # The new branch holds the whole change, and nothing from .atelier.
+  W=".atelier/worktrees/p9"
+  [ "$(git -C "$W" symbolic-ref --short HEAD)" = atelier/p9 ]
+  [ "$(git rev-parse atelier/p9~1)" = "$base" ]
+  [ "$(cat "$W/kept")" = a2 ]
+  [ "$(cat "$W/added")" = new ]
+  [ ! -e "$W/gone" ]
+  [ -z "$(git ls-tree -r --name-only atelier/p9 -- .atelier)" ]
+  [ -z "$(git -C "$W" status --porcelain)" ]
 }
