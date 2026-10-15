@@ -69,6 +69,10 @@ With none set, Atelier reads and behaves exactly as in plain Claude Code.
 
 In host mode `state.json` also carries `boards: [{title, url}]` for the published boards.
 
+0.4.0: host contract (the five variables above). With none of them set, every hook and the command file behave as in 0.3.0.
+
+Release note: `plugin.json` carries `version`, which is the key `claude plugin update` compares. Bump it (and `marketplace.json`) with every change on `main` that should reach installed copies.
+
 ## Layout
 
 ```
