@@ -40,12 +40,32 @@ input="$(cat)"
 # branch is skipped and the hook behaves exactly as before.
 if atelier_autonomous; then
   needs_you="${ATELIER_HOST_NEEDS_YOU_TOOL:-}"
-  if [[ "$needs_you" =~ ^mcp__[A-Za-z0-9_]+__[A-Za-z0-9_]+$ ]]; then
-    blocked="call ${needs_you} with the reason, then set awaiting:\"user\" with the reason in failure.reason, write state.json and end the turn"
-  else
-    blocked='set awaiting:"user" with the reason in failure.reason, write state.json and end the turn'
+  [[ "$needs_you" =~ ^mcp__[A-Za-z0-9_]+__[A-Za-z0-9_]+$ ]] || needs_you=""
+  # Only an owned running pipeline has a brief.md and a state.json to write;
+  # any other task in the session gets a reason that names neither.
+  sp=""
+  sid="$(printf '%s' "$input" | jq -r '.session_id // empty' 2>/dev/null || true)"
+  if [ -n "$sid" ]; then
+    cwd="$(printf '%s' "$input" | jq -r '.cwd // empty' 2>/dev/null || true)"
+    [ -n "$cwd" ] && cd "$cwd" 2>/dev/null || true
+    wsp="$(find_workspace_root "${cwd:-$PWD}" 2>/dev/null || true)"
+    [ -n "$wsp" ] && sp="$(find_owned_running_pipeline "$wsp" "$sid" 2>/dev/null || true)"
   fi
-  reason="Atelier host contract: this session is autonomous (ATELIER_AUTONOMY). Decide with the sensible default and record the assumption in brief.md. If you are truly blocked, ${blocked}."
+  if [ -n "$sp" ]; then
+    if [ -n "$needs_you" ]; then
+      blocked="call ${needs_you} with the reason, then set awaiting:\"user\" with the reason in failure.reason, write state.json and end the turn"
+    else
+      blocked='set awaiting:"user" with the reason in failure.reason, write state.json and end the turn'
+    fi
+    reason="Atelier host contract: this session is autonomous (ATELIER_AUTONOMY). Decide with the sensible default and record the assumption in brief.md. If you are truly blocked, ${blocked}."
+  else
+    if [ -n "$needs_you" ]; then
+      blocked="call ${needs_you} with the reason"
+    else
+      blocked="say what blocks you in your reply and end the turn"
+    fi
+    reason="Atelier host contract: this session is autonomous (ATELIER_AUTONOMY), so nobody answers questions. Decide with a sensible default and say so in your reply. If you are truly blocked, ${blocked}."
+  fi
   jq -nc --arg r "$reason" '{
     hookSpecificOutput: {
       hookEventName: "PreToolUse",

@@ -312,3 +312,23 @@ host_finish() {
   run bash -c 'cd "$1" && find commands skills docs scripts hooks lib -type f | sort' _ "$ROOT"
   [ "$output" = "$(printf '%s\n' "$allowed" | sort)" ]
 }
+
+@test "F10: with no owned pipeline the autonomous deny reason names neither brief.md nor state.json" {
+  for setup_case in none foreign; do
+    rm -rf "$TMP/.atelier" "$TMP/.git"
+    if [ "$setup_case" = none ]; then mkdir -p "$TMP/.git"; else mkdir -p "$TMP/.atelier/pipelines/p1"; mkstate sess-B running null; fi
+    run bash -c 'printf "%s" "$1" | ATELIER_AUTONOMY=autonomous bash "$2"' _ "$(input)" "$HOOK"
+    [ "$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecision')" = deny ]
+    reason="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecisionReason')"
+    [[ "$reason" == *'Decide with a sensible default and say so in your reply'* ]]
+    [[ "$reason" == *'say what blocks you in your reply and end the turn'* ]]
+    [[ "$reason" != *brief.md* && "$reason" != *state.json* && "$reason" != *awaiting* ]]
+    run bash -c 'printf "%s" "$1" | ATELIER_AUTONOMY=autonomous ATELIER_HOST_NEEDS_YOU_TOOL=mcp__liaison_session__needs_you bash "$2"' _ "$(input)" "$HOOK"
+    reason="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecisionReason')"
+    [[ "$reason" == *'call mcp__liaison_session__needs_you with the reason.'* ]]
+    [[ "$reason" != *brief.md* && "$reason" != *awaiting* ]]
+  done
+  # With empty input (no session id) the hook still denies, with the short reason.
+  run bash -c 'printf "{}" | ATELIER_AUTONOMY=autonomous bash "$1"' _ "$HOOK"
+  [[ "$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecisionReason')" != *brief.md* ]]
+}
