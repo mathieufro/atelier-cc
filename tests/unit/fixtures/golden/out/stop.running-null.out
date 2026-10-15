@@ -1,0 +1,3 @@
+{"decision":"block","reason":"You are the Atelier orchestrator for pipeline p1 (type rung 2), mid-autonomous execution. Do NOT yield. Re-read the driver at @PLUGIN@/commands/atelier.md, the pipeline state at @ROOT@/.atelier/pipelines/p1/state.json, and its brief.md + PROGRESS.md, then continue driving at phase 'execute'. done=[frame,brainstorm,spec,review] remaining=[execute,validate,handoff]. Update state.json (a single Write) as you advance."}
+
+exit=0

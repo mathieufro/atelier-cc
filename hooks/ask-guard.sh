@@ -34,6 +34,28 @@ source "$ROOT/lib/common.sh"
 require_jq
 
 input="$(cat)"
+
+# Host contract (S37): an autonomous host session has no human to answer, in any
+# pipeline state, including before state.json exists. Without the env this
+# branch is skipped and the hook behaves exactly as before.
+if atelier_autonomous; then
+  needs_you="${ATELIER_HOST_NEEDS_YOU_TOOL:-}"
+  if [[ "$needs_you" =~ ^mcp__[A-Za-z0-9_]+__[A-Za-z0-9_]+$ ]]; then
+    blocked="call ${needs_you} with the reason"
+  else
+    blocked='set awaiting:"user" with the reason in failure.reason'
+  fi
+  reason="Atelier host contract: this session is autonomous (ATELIER_AUTONOMY). Decide with the sensible default and record the assumption in brief.md. If you are truly blocked, ${blocked}."
+  jq -nc --arg r "$reason" '{
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      permissionDecision: "deny",
+      permissionDecisionReason: $r
+    }
+  }'
+  exit 0
+fi
+
 sid="$(printf '%s' "$input" | jq -r '.session_id // empty')"
 [ -n "$sid" ] || exit 0
 cwd="$(printf '%s' "$input" | jq -r '.cwd // empty')"

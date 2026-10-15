@@ -1,0 +1,3 @@
+{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"⏳ Atelier heartbeat — you are the orchestrator for pipeline p1 (rung 2), phase 'execute', mid-autonomous execution. Do NOT stop early or drift from the original task.\nTASK: Golden fixture task\nLEDGER: done=[frame,brainstorm,spec,review] remaining=[execute,validate,handoff]\nDEFINITION OF DONE: you may set status:\"complete\" ONLY after 'handoff' is in done[]. Walk every remaining phase (a phase may be one line deep by the rung's judgment, never absent). Keep state.json's done[]/phase current, and set awaiting before any yield."}}
+
+exit=0
