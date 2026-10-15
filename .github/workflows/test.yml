@@ -1,0 +1,38 @@
+name: test
+
+on: [push, pull_request]
+
+jobs:
+  bats:
+    name: bats (${{ matrix.os }}, ambient ${{ matrix.ambient }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        ambient: [none, autonomous]
+    env:
+      ATELIER_AUTONOMY: ${{ matrix.ambient == 'autonomous' && 'autonomous' || '' }}
+      ATELIER_HOST: ${{ matrix.ambient == 'autonomous' && 'liaison' || '' }}
+      ATELIER_HOST_DONE_TOOL: ${{ matrix.ambient == 'autonomous' && 'x' || '' }}
+      ATELIER_HOST_NEEDS_YOU_TOOL: ${{ matrix.ambient == 'autonomous' && 'y' || '' }}
+      ATELIER_HOST_FINISH: ${{ matrix.ambient == 'autonomous' && 'pr' || '' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Install jq (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y jq
+      - name: Install bash 5 (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install bash jq
+          echo "$(brew --prefix)/bin" >> "$GITHUB_PATH"
+      - name: Versions
+        run: |
+          bash --version | head -1
+          jq --version
+          python3 --version
+      - name: Run bats
+        run: tests/bats/bin/bats tests/unit

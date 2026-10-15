@@ -1,0 +1,3 @@
+{"decision":"block","reason":"PREMATURE COMPLETE BLOCKED — pipeline p1 (rung 2) is marked status:\"complete\" but the terminal stage 'handoff' is NOT in done[]. done=[frame,brainstorm,spec,review] remaining=[execute,validate,handoff]. You stopped early — the rest of the flow never ran. Set status:\"running\", awaiting:null, set phase to the first remaining stage, and keep driving (re-read @PLUGIN@/commands/atelier.md for the flow). You may complete ONLY once 'handoff' is in done[]."}
+
+exit=0

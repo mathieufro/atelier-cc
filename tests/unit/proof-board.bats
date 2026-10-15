@@ -3,6 +3,7 @@
 # whatever the card text, and a decision board must not read like a proof board.
 
 setup() {
+  unset ATELIER_AUTONOMY ATELIER_HOST ATELIER_HOST_DONE_TOOL ATELIER_HOST_NEEDS_YOU_TOOL ATELIER_HOST_FINISH
   ROOT="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"
   GEN="$ROOT/scripts/proof-board.py"
   TMP="$(mktemp -d)"

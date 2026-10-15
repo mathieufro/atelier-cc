@@ -1,0 +1,3 @@
+{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"You are the Atelier orchestrator and pipeline p1 (rung 2) is still RUNNING (context was just startup). Re-read @PLUGIN@/commands/atelier.md, @ROOT@/.atelier/pipelines/p1/state.json, and the brief.md + PROGRESS.md beside it, then resume driving at phase 'execute'. Do NOT stop until 'handoff' is in done[] and you set status:\"complete\".\nTASK: Golden fixture task\nLEDGER: done=[frame,brainstorm,spec,review] remaining=[execute,validate,handoff]"}}
+
+exit=0

@@ -4,6 +4,7 @@
 # ALLOW by no output.
 
 setup() {
+  unset ATELIER_AUTONOMY ATELIER_HOST ATELIER_HOST_DONE_TOOL ATELIER_HOST_NEEDS_YOU_TOOL ATELIER_HOST_FINISH
   ROOT="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"
   HOOK="$ROOT/hooks/stop.sh"
   TMP="$(mktemp -d)"

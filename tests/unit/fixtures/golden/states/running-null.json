@@ -1,0 +1,1 @@
+{"id":"p1","rung":2,"task":"Golden fixture task","phase":"execute","plan":["frame","brainstorm","spec","review","execute","validate","handoff"],"done":["frame","brainstorm","spec","review"],"sourceSessionId":"sess-A","status":"running","awaiting":null}

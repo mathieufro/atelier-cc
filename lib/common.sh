@@ -17,6 +17,11 @@ die() { echo "atelier-cc: $*" >&2; exit 1; }
 
 require_jq() { command -v jq >/dev/null 2>&1 || die "jq is required but not installed"; }
 
+# Host contract (S37): an embedding host runs Atelier unattended by setting
+# ATELIER_AUTONOMY=autonomous. Exact match only; any other value, or none, keeps
+# today's behaviour.
+atelier_autonomous() { [ "${ATELIER_AUTONOMY:-}" = "autonomous" ]; }
+
 # Walk up from a directory to the workspace root (first ancestor containing
 # .atelier/ or .git/). The orchestrator always runs with its cwd in the MAIN
 # workspace (worktrees are used only for subagent code changes, and subagents

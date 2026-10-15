@@ -9,6 +9,8 @@ phase: brainstorm
 You run this phase yourself, in conversation with the owner. It is the only moment in the
 flow where a question is legitimate, so everything that needs the owner is settled here.
 
+When Frame's echo shows `ATELIER_AUTONOMY=autonomous` (a host runs the session unattended), follow atelier.md §0b instead: one line, assumptions in `brief.md`, no question.
+
 ## Depth by rung
 
 - **R0**: no conversation unless the intent is genuinely ambiguous; then one line with your

@@ -1,0 +1,3 @@
+{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"An Atelier pipeline (p1) is marked running at phase 'execute' but is not owned by this session. To continue it: /atelier resume p1"}}
+
+exit=0
